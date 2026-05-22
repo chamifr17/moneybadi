@@ -10,6 +10,7 @@ import {
   Target,
   Trophy,
   WalletCards,
+  X,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -17,13 +18,23 @@ function App() {
   const [activeTab, setActiveTab] = useState('home')
   const [isDark, setIsDark] = useState(true)
   const [coins, setCoins] = useState(85)
+  const [activeForm, setActiveForm] = useState(null)
+  const [walletForm, setWalletForm] = useState({
+    name: '',
+    type: 'Bank',
+    balance: '',
+  })
+  const [budgetForm, setBudgetForm] = useState({
+    name: '',
+    limit: '',
+  })
   const [equipped] = useState({
     outfit: 'Mint hoodie',
     accessory: 'Round glasses',
     room: 'Cozy desk',
   })
 
-  const accounts = [
+  const [accounts, setAccounts] = useState([
     { name: 'Maybank', type: 'Bank', balance: 820, tone: 'bg-[#eeeaff]' },
     { name: 'CIMB', type: 'Bank', balance: 360, tone: 'bg-slate-100' },
     { name: 'Cash', type: 'Cash', balance: 90, tone: 'bg-zinc-100' },
@@ -33,9 +44,9 @@ function App() {
     { name: 'ShopeePay', type: 'E-wallet', balance: 32, tone: 'bg-zinc-100' },
     { name: 'Savings', type: 'Saving', balance: 500, tone: 'bg-[#f3f1ff]' },
     { name: 'Credit Card', type: 'Credit', balance: -280, tone: 'bg-rose-50' },
-  ]
+  ])
 
-  const budgets = [
+  const [budgets, setBudgets] = useState([
     { name: 'Food', spent: 310, limit: 500, color: 'bg-[#6A4DF5]' },
     { name: 'Transport', spent: 92, limit: 180, color: 'bg-slate-700' },
     { name: 'Shopping', spent: 210, limit: 260, color: 'bg-zinc-500' },
@@ -44,7 +55,7 @@ function App() {
     { name: 'Entertainment', spent: 85, limit: 150, color: 'bg-slate-700' },
     { name: 'Health', spent: 45, limit: 120, color: 'bg-zinc-500' },
     { name: 'Savings', spent: 180, limit: 300, color: 'bg-[#9787ff]' },
-  ]
+  ])
 
   const quests = [
     { title: 'Log one expense', reward: 15, done: true },
@@ -68,6 +79,43 @@ function App() {
 
   const completeQuest = (coinReward) => {
     setCoins((current) => current + coinReward)
+  }
+
+  const addWallet = (event) => {
+    event.preventDefault()
+    const amount = Number(walletForm.balance)
+    if (!walletForm.name.trim() || Number.isNaN(amount)) return
+
+    const shouldBeDebt = ['Credit', 'Pay later'].includes(walletForm.type)
+    setAccounts((current) => [
+      {
+        name: walletForm.name.trim(),
+        type: walletForm.type,
+        balance: shouldBeDebt && amount > 0 ? -amount : amount,
+        tone: shouldBeDebt ? 'bg-rose-50' : 'bg-[#eeeaff]',
+      },
+      ...current,
+    ])
+    setWalletForm({ name: '', type: 'Bank', balance: '' })
+    setActiveForm(null)
+  }
+
+  const addBudget = (event) => {
+    event.preventDefault()
+    const limit = Number(budgetForm.limit)
+    if (!budgetForm.name.trim() || Number.isNaN(limit) || limit <= 0) return
+
+    setBudgets((current) => [
+      {
+        name: budgetForm.name.trim(),
+        spent: 0,
+        limit,
+        color: 'bg-[#6A4DF5]',
+      },
+      ...current,
+    ])
+    setBudgetForm({ name: '', limit: '' })
+    setActiveForm(null)
   }
 
   const tabs = [
@@ -210,6 +258,7 @@ function App() {
               title="Wallets"
               subtitle="Track banks, cash, e-wallets, and pay-later."
               isDark={isDark}
+              onAction={() => setActiveForm('wallet')}
             />
             <div className="grid grid-cols-2 gap-3 pb-6">
               {accounts.map((account) => (
@@ -252,6 +301,7 @@ function App() {
               title="Budgets"
               subtitle="Simple category limits with progress."
               isDark={isDark}
+              onAction={() => setActiveForm('budget')}
             />
             <div className="grid grid-cols-2 gap-3 pb-6">
               {budgets.map((budget) => {
@@ -356,6 +406,101 @@ function App() {
           )
         })}
       </nav>
+
+      {activeForm === 'wallet' && (
+        <FormSheet title="Add Wallet" onClose={() => setActiveForm(null)}>
+          <form className="space-y-4" onSubmit={addWallet}>
+            <Field label="Wallet name">
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                onChange={(event) =>
+                  setWalletForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Maybank, Cash, TNG..."
+                value={walletForm.name}
+              />
+            </Field>
+            <Field label="Wallet type">
+              <select
+                className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                onChange={(event) =>
+                  setWalletForm((current) => ({
+                    ...current,
+                    type: event.target.value,
+                  }))
+                }
+                value={walletForm.type}
+              >
+                <option>Bank</option>
+                <option>Cash</option>
+                <option>E-wallet</option>
+                <option>Saving</option>
+                <option>Pay later</option>
+                <option>Credit</option>
+              </select>
+            </Field>
+            <Field label="Current balance">
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                inputMode="decimal"
+                onChange={(event) =>
+                  setWalletForm((current) => ({
+                    ...current,
+                    balance: event.target.value,
+                  }))
+                }
+                placeholder="0"
+                type="number"
+                value={walletForm.balance}
+              />
+            </Field>
+            <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+              Save wallet
+            </button>
+          </form>
+        </FormSheet>
+      )}
+
+      {activeForm === 'budget' && (
+        <FormSheet title="Add Budget" onClose={() => setActiveForm(null)}>
+          <form className="space-y-4" onSubmit={addBudget}>
+            <Field label="Budget category">
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                onChange={(event) =>
+                  setBudgetForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Food, bills, transport..."
+                value={budgetForm.name}
+              />
+            </Field>
+            <Field label="Monthly limit">
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                inputMode="decimal"
+                onChange={(event) =>
+                  setBudgetForm((current) => ({
+                    ...current,
+                    limit: event.target.value,
+                  }))
+                }
+                placeholder="500"
+                type="number"
+                value={budgetForm.limit}
+              />
+            </Field>
+            <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+              Save budget
+            </button>
+          </form>
+        </FormSheet>
+      )}
     </main>
   )
 }
@@ -438,7 +583,38 @@ function Stat({ label, value, isDark }) {
   )
 }
 
-function ActionHeader({ icon: Icon, title, subtitle, isDark }) {
+function FormSheet({ children, title, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/50">
+      <section className="w-full max-w-md rounded-t-[2rem] border border-white/10 bg-[#2f2e38] p-5 text-slate-100 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <button
+            className="grid size-10 place-items-center rounded-full bg-[#202020] text-slate-300"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        {children}
+      </section>
+    </div>
+  )
+}
+
+function Field({ children, label }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-slate-300">
+        {label}
+      </span>
+      {children}
+    </label>
+  )
+}
+
+function ActionHeader({ icon: Icon, title, subtitle, isDark, onAction }) {
   return (
     <div
       className={`flex items-center justify-between rounded-[2rem] p-5 text-white shadow-lg ${
@@ -449,7 +625,11 @@ function ActionHeader({ icon: Icon, title, subtitle, isDark }) {
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="mt-1 text-sm text-slate-300">{subtitle}</p>
       </div>
-      <button className="grid size-11 place-items-center rounded-full bg-white text-[#6A4DF5]">
+      <button
+        className="grid size-11 place-items-center rounded-full bg-white text-[#6A4DF5]"
+        onClick={onAction}
+        type="button"
+      >
         <Icon size={20} />
       </button>
     </div>
