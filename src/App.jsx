@@ -18,10 +18,14 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from './lib/supabase'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [authNotice, setAuthNotice] = useState('')
   const [authMode, setAuthMode] = useState('login')
   const [authForm, setAuthForm] = useState({
     name: '',
@@ -161,25 +165,85 @@ function App() {
     historyWeek,
   )
 
-  const submitAuth = (event) => {
+  useEffect(() => {
+    const setUserFromSession = (session) => {
+      const user = session?.user
+
+      if (!user) {
+        setIsAuthenticated(false)
+        setCurrentUser({ name: 'Chami', email: 'chami@moneybadi.app' })
+        return
+      }
+
+      setCurrentUser({
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+        email: user.email || '',
+      })
+      setIsAuthenticated(true)
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setUserFromSession(data.session)
+      setIsAuthLoading(false)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserFromSession(session)
+      setIsAuthLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const submitAuth = async (event) => {
     event.preventDefault()
     if (!authForm.email.trim() || !authForm.password.trim()) return
 
-    setCurrentUser({
-      name:
-        authMode === 'signup' && authForm.name.trim()
-          ? authForm.name.trim()
-          : authForm.email.split('@')[0],
-      email: authForm.email.trim(),
-    })
-    setIsAuthenticated(true)
+    setAuthError('')
+    setAuthNotice('')
+    setIsAuthLoading(true)
+
+    const authRequest =
+      authMode === 'signup'
+        ? supabase.auth.signUp({
+            email: authForm.email.trim(),
+            password: authForm.password,
+            options: {
+              data: {
+                full_name: authForm.name.trim() || authForm.email.split('@')[0],
+              },
+            },
+          })
+        : supabase.auth.signInWithPassword({
+            email: authForm.email.trim(),
+            password: authForm.password,
+          })
+
+    const { data, error } = await authRequest
+
+    if (error) {
+      setAuthError(error.message)
+      setIsAuthLoading(false)
+      return
+    }
+
+    if (authMode === 'signup' && !data.session) {
+      setAuthNotice('Account created. Check your email to confirm your signup.')
+      setIsAuthLoading(false)
+    }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut()
     setIsAuthenticated(false)
     setActiveTab('home')
     setActiveForm(null)
     setEditingId(null)
+    setAuthForm({ name: '', email: '', password: '' })
+    setAuthError('')
+    setAuthNotice('')
   }
 
   const completeQuest = (coinReward) => {
@@ -372,10 +436,17 @@ function App() {
   if (!isAuthenticated) {
     return (
       <AuthScreen
+        authError={authError}
         authForm={authForm}
         authMode={authMode}
+        authNotice={authNotice}
+        isLoading={isAuthLoading}
         onChange={setAuthForm}
-        onModeChange={setAuthMode}
+        onModeChange={(mode) => {
+          setAuthMode(mode)
+          setAuthError('')
+          setAuthNotice('')
+        }}
         onSubmit={submitAuth}
       />
     )
@@ -1402,7 +1473,16 @@ function groupExpenses(expenses, selectedWeek, selectedMonth) {
   return months
 }
 
-function AuthScreen({ authForm, authMode, onChange, onModeChange, onSubmit }) {
+function AuthScreen({
+  authError,
+  authForm,
+  authMode,
+  authNotice,
+  isLoading,
+  onChange,
+  onModeChange,
+  onSubmit,
+}) {
   const isSignup = authMode === 'signup'
 
   const updateField = (field, value) => {
@@ -1493,8 +1573,22 @@ function AuthScreen({ authForm, authMode, onChange, onModeChange, onSubmit }) {
               </div>
             )}
 
-            <button className="w-full rounded-xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white transition hover:bg-[#5b3ff0]">
-              {isSignup ? 'Continue' : 'Continue'}
+            {authError && (
+              <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200">
+                {authError}
+              </p>
+            )}
+            {authNotice && (
+              <p className="rounded-xl border border-[#6A4DF5]/30 bg-[#6A4DF5]/10 px-3 py-2 text-sm font-medium text-[#c8c0ff]">
+                {authNotice}
+              </p>
+            )}
+
+            <button
+              className="w-full rounded-xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white transition hover:bg-[#5b3ff0] disabled:cursor-not-allowed disabled:bg-[#4a3aa5]"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Please wait...' : 'Continue'}
             </button>
           </form>
 
