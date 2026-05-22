@@ -1,6 +1,9 @@
 import {
   BadgeCheck,
   Edit3,
+  Lock,
+  LogOut,
+  Mail,
   Home,
   MoreHorizontal,
   Moon,
@@ -11,12 +14,24 @@ import {
   Target,
   Trash2,
   Trophy,
+  User,
   WalletCards,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
+  const [authForm, setAuthForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+  })
+  const [currentUser, setCurrentUser] = useState({
+    name: 'Chami',
+    email: 'chami@moneybadi.app',
+  })
   const [activeTab, setActiveTab] = useState('home')
   const [isDark, setIsDark] = useState(true)
   const [coins, setCoins] = useState(85)
@@ -145,6 +160,27 @@ function App() {
     selectedHistoryMonth,
     historyWeek,
   )
+
+  const submitAuth = (event) => {
+    event.preventDefault()
+    if (!authForm.email.trim() || !authForm.password.trim()) return
+
+    setCurrentUser({
+      name:
+        authMode === 'signup' && authForm.name.trim()
+          ? authForm.name.trim()
+          : authForm.email.split('@')[0],
+      email: authForm.email.trim(),
+    })
+    setIsAuthenticated(true)
+  }
+
+  const logout = () => {
+    setIsAuthenticated(false)
+    setActiveTab('home')
+    setActiveForm(null)
+    setEditingId(null)
+  }
 
   const completeQuest = (coinReward) => {
     setCoins((current) => current + coinReward)
@@ -333,6 +369,18 @@ function App() {
     shadow: isDark ? 'shadow-black/40' : 'shadow-slate-300/60',
   }
 
+  if (!isAuthenticated) {
+    return (
+      <AuthScreen
+        authForm={authForm}
+        authMode={authMode}
+        onChange={setAuthForm}
+        onModeChange={setAuthMode}
+        onSubmit={submitAuth}
+      />
+    )
+  }
+
   return (
     <main
       className={`mx-auto flex h-screen max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow}`}
@@ -342,16 +390,25 @@ function App() {
           <div>
             <p className="text-sm font-semibold text-[#6A4DF5]">MoneyBadi</p>
             <h1 className={`text-2xl font-semibold ${theme.title}`}>
-              Hi, Chami
+              Hi, {currentUser.name}
             </h1>
           </div>
-          <button
-            className={`grid size-11 place-items-center rounded-full border shadow-sm ${theme.card}`}
-            onClick={() => setIsDark((current) => !current)}
-            type="button"
-          >
-            {isDark ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={`grid size-11 place-items-center rounded-full border shadow-sm ${theme.card}`}
+              onClick={() => setIsDark((current) => !current)}
+              type="button"
+            >
+              {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+            <button
+              className={`grid size-11 place-items-center rounded-full border shadow-sm ${theme.card}`}
+              onClick={logout}
+              type="button"
+            >
+              <LogOut size={19} />
+            </button>
+          </div>
         </header>
       )}
 
@@ -1343,6 +1400,145 @@ function groupExpenses(expenses, selectedWeek, selectedMonth) {
   })
 
   return months
+}
+
+function AuthScreen({ authForm, authMode, onChange, onModeChange, onSubmit }) {
+  const isSignup = authMode === 'signup'
+
+  const updateField = (field, value) => {
+    onChange((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  return (
+    <main className="mx-auto flex h-screen max-w-md flex-col overflow-hidden bg-[#202020] shadow-2xl shadow-black/40">
+      <section className="grid min-h-0 flex-1 place-items-center overflow-hidden bg-[#202020] px-7">
+        <div className="w-full max-w-sm text-slate-100">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-[#6A4DF5] text-white">
+              <BadiNavIcon size={26} />
+            </div>
+            <h1 className="text-3xl font-semibold text-white">
+              {isSignup ? 'Create your account' : 'Welcome back'}
+            </h1>
+            <p className="mt-2 text-sm text-slate-400">
+              {isSignup
+                ? 'Start tracking your money with MoneyBadi.'
+                : 'Login to continue to MoneyBadi.'}
+            </p>
+          </div>
+
+          <div className="mb-5 grid grid-cols-2 rounded-xl bg-[#2a2a2a] p-1 text-sm font-medium">
+            <button
+              className={`rounded-lg py-2 transition ${
+                !isSignup ? 'bg-[#3a3a3a] text-white' : 'text-slate-400'
+              }`}
+              onClick={() => onModeChange('login')}
+              type="button"
+            >
+              Login
+            </button>
+            <button
+              className={`rounded-lg py-2 transition ${
+                isSignup ? 'bg-[#3a3a3a] text-white' : 'text-slate-400'
+              }`}
+              onClick={() => onModeChange('signup')}
+              type="button"
+            >
+              Sign up
+            </button>
+          </div>
+
+          <form className="space-y-4" onSubmit={onSubmit}>
+            {isSignup && (
+              <AuthField
+                icon={User}
+                label="Name"
+                onChange={(event) => updateField('name', event.target.value)}
+                placeholder="Your name"
+                value={authForm.name}
+              />
+            )}
+            <AuthField
+              icon={Mail}
+              label="Email"
+              onChange={(event) => updateField('email', event.target.value)}
+              placeholder="you@email.com"
+              type="email"
+              value={authForm.email}
+            />
+            <AuthField
+              icon={Lock}
+              label="Password"
+              onChange={(event) => updateField('password', event.target.value)}
+              placeholder="Minimum 6 characters"
+              type="password"
+              value={authForm.password}
+            />
+
+            {!isSignup && (
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <label className="flex items-center gap-2 text-slate-400">
+                  <input
+                    className="size-4 accent-[#6A4DF5]"
+                    type="checkbox"
+                  />
+                  Remember me
+                </label>
+                <button className="text-[#a99cff]" type="button">
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
+            <button className="w-full rounded-xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white transition hover:bg-[#5b3ff0]">
+              {isSignup ? 'Continue' : 'Continue'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-slate-400">
+            {isSignup ? 'Already have an account?' : 'No account yet?'}{' '}
+            <button
+              className="font-semibold text-[#a99cff]"
+              onClick={() => onModeChange(isSignup ? 'login' : 'signup')}
+              type="button"
+            >
+              {isSignup ? 'Login' : 'Sign up'}
+            </button>
+          </p>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function AuthField({
+  icon: Icon,
+  label,
+  onChange,
+  placeholder,
+  type = 'text',
+  value,
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-slate-300">
+        {label}
+      </span>
+      <div className="flex items-center gap-3 rounded-xl border border-[#3a3a3a] bg-transparent px-4 py-3 text-slate-100 transition focus-within:border-[#6A4DF5]">
+        <Icon className="shrink-0 text-slate-500" size={18} />
+        <input
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-600"
+          onChange={onChange}
+          placeholder={placeholder}
+          type={type}
+          value={value}
+        />
+      </div>
+    </label>
+  )
 }
 
 function Badi({ equipped, large = false }) {
