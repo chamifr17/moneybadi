@@ -1,8 +1,8 @@
 import {
   BadgeCheck,
-  Banknote,
   Edit3,
   Home,
+  MoreHorizontal,
   Moon,
   Plus,
   Shirt,
@@ -22,9 +22,10 @@ function App() {
   const [coins, setCoins] = useState(85)
   const [activeForm, setActiveForm] = useState(null)
   const [editingId, setEditingId] = useState(null)
-  const [historyFilter, setHistoryFilter] = useState('month')
+  const [historyWeek, setHistoryWeek] = useState(1)
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState('2026-05')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [isSpendCardFlipped, setIsSpendCardFlipped] = useState(false)
   const [walletForm, setWalletForm] = useState({
     name: '',
     type: 'Bank',
@@ -95,6 +96,22 @@ function App() {
       date: '2026-05-15',
       note: 'Snacks and drinks',
     },
+    {
+      id: 4,
+      amount: 28,
+      accountName: 'CIMB',
+      budgetName: 'Food',
+      date: '2026-04-28',
+      note: 'Dinner',
+    },
+    {
+      id: 5,
+      amount: 65,
+      accountName: 'Maybank',
+      budgetName: 'Shopping',
+      date: '2026-04-20',
+      note: 'Shirt',
+    },
   ])
 
   const quests = [
@@ -117,10 +134,16 @@ function App() {
   }
   const badiMood = totals.safeSpend >= 40 ? 'Calm' : 'Careful'
   const historyMonths = getExpenseMonths(expenses)
+  const todayStats = getTodayStats(expenses, totals.safeSpend)
   const groupedExpenseHistory = groupExpenses(
     expenses,
-    historyFilter,
+    historyWeek,
     selectedHistoryMonth,
+  )
+  const historyGraphData = getSpendingGraphData(
+    expenses,
+    selectedHistoryMonth,
+    historyWeek,
   )
 
   const completeQuest = (coinReward) => {
@@ -341,25 +364,64 @@ function App() {
       >
         {activeTab === 'home' && (
           <div className="space-y-4 pt-3">
-            <div className="rounded-[2rem] bg-[#6A4DF5] p-5 text-white shadow-xl shadow-[#6A4DF5]/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-white/75">Today</p>
-                  <h2 className="mt-1 text-3xl font-semibold text-white">
-                    RM{totals.safeSpend}
-                  </h2>
-                  <p className="mt-1 text-sm text-white/75">safe to spend</p>
+            <div
+              className="block h-[286px] w-full text-left [perspective:1200px]"
+              onClick={() => setIsSpendCardFlipped((current) => !current)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  setIsSpendCardFlipped((current) => !current)
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <div
+                className="relative h-full transition-transform duration-500 [transform-style:preserve-3d]"
+                style={{
+                  transform: isSpendCardFlipped
+                    ? 'rotateY(180deg)'
+                    : 'rotateY(0deg)',
+                }}
+              >
+                <div className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#6A4DF5] p-5 text-white shadow-xl shadow-[#6A4DF5]/20 [backface-visibility:hidden]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-white/75">Today</p>
+                      <h2 className="mt-1 text-3xl font-semibold text-white">
+                        RM{totals.safeSpend}
+                      </h2>
+                      <p className="mt-1 text-sm text-white/75">
+                        safe to spend
+                      </p>
+                    </div>
+                    <Badi equipped={equipped} />
+                  </div>
+                  <div className="mt-4 rounded-2xl bg-white/15 p-3 ring-1 ring-white/20 backdrop-blur">
+                    <p className="text-sm font-medium text-white">
+                      Badi feels calm.
+                    </p>
+                    <p className="mt-1 text-sm text-white/75">
+                      Food spending is moving fast. Review it today to keep your
+                      buddy energized.
+                    </p>
+                  </div>
+                  <p className="mt-2 text-center text-xs font-semibold text-white/70">
+                    See insight
+                  </p>
                 </div>
-                <Badi equipped={equipped} />
-              </div>
-              <div className="mt-4 rounded-2xl bg-white/15 p-3 ring-1 ring-white/20 backdrop-blur">
-                <p className="text-sm font-medium text-white">
-                  Badi feels calm.
-                </p>
-                <p className="mt-1 text-sm text-white/75">
-                  Food spending is moving fast. Review it today to keep your
-                  buddy energized.
-                </p>
+                <div className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#6A4DF5] p-5 text-white shadow-xl shadow-[#6A4DF5]/20 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white/75">
+                        Today insight
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white">
+                      {formatExpenseDate(todayStats.date)}
+                    </span>
+                  </div>
+                  <TodayInsight stats={todayStats} />
+                </div>
               </div>
             </div>
 
@@ -435,36 +497,34 @@ function App() {
             <div className="grid grid-cols-2 gap-3 pb-6">
               {accounts.map((account) => (
                 <div
-                  className={`min-h-40 rounded-2xl border p-4 shadow-sm ${theme.card}`}
+                  className="relative min-h-36 rounded-3xl border border-white/10 bg-[#2b2b32] p-4 text-slate-100 shadow-sm"
                   key={account.id}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div
-                      className={`grid size-12 place-items-center rounded-xl ${account.tone} text-[#6A4DF5]`}
-                    >
-                      <Banknote size={21} />
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold leading-tight">
+                        {account.name}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {account.type}
+                      </p>
                     </div>
                     <CardActions
                       onDelete={() => deleteWallet(account.id)}
                       onEdit={() => openEditWallet(account)}
                     />
                   </div>
-                  <p className="mt-4 text-base font-semibold leading-tight">
-                    {account.name}
-                  </p>
-                  <p className={`mt-1 text-sm ${theme.muted}`}>
-                    {account.type}
-                  </p>
                   <p
-                    className={`mt-5 text-xl font-semibold ${
+                    className={`mt-8 text-2xl font-semibold tracking-tight ${
                       account.balance < 0
-                        ? isDark
-                          ? 'text-rose-300'
-                          : 'text-rose-600'
+                        ? 'text-rose-300'
                         : ''
                     }`}
                   >
                     RM{account.balance}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {account.balance < 0 ? 'Outstanding' : 'Available balance'}
                   </p>
                 </div>
               ))}
@@ -489,7 +549,7 @@ function App() {
                 )
                 return (
                   <div
-                    className={`min-h-40 rounded-2xl border p-4 shadow-sm ${theme.card}`}
+                    className="relative min-h-36 rounded-3xl border border-white/10 bg-[#2b2b32] p-4 text-slate-100 shadow-sm"
                     key={budget.id}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -497,21 +557,35 @@ function App() {
                         <p className="text-base font-semibold leading-tight">
                           {budget.name}
                         </p>
-                        <p className={`mt-1 text-sm ${theme.muted}`}>
+                        <p className="mt-1 text-xs text-slate-400">
                           RM{budget.limit - budget.spent} left
                         </p>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <span className="rounded-full bg-[#eeeaff] px-2 py-1 text-xs font-semibold text-[#6A4DF5]">
-                          {Math.round(progress)}%
-                        </span>
-                        <CardActions
-                          onDelete={() => deleteBudget(budget.id)}
-                          onEdit={() => openEditBudget(budget)}
-                        />
-                      </div>
+                      <CardActions
+                        onDelete={() => deleteBudget(budget.id)}
+                        onEdit={() => openEditBudget(budget)}
+                      />
                     </div>
-                    <p className="mt-5 text-xl font-semibold">
+                    <div className="mt-6 flex items-end justify-between gap-2">
+                      <div>
+                        <p className="text-2xl font-semibold tracking-tight">
+                          RM{budget.spent}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          of RM{budget.limit}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-[#3a3748] px-2.5 py-1 text-xs font-semibold text-[#b9afff]">
+                        {Math.round(progress)}%
+                      </span>
+                    </div>
+                    <div className="mt-4 h-1.5 rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-[#6A4DF5]"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    {/* <p className="mt-5 text-xl font-semibold">
                       RM{budget.spent}
                     </p>
                     <p className={`text-xs ${theme.muted}`}>
@@ -523,6 +597,7 @@ function App() {
                         style={{ width: `${progress}%` }}
                       />
                     </div>
+                    */}
                   </div>
                 )
               })}
@@ -641,10 +716,12 @@ function App() {
             </form>
 
             <section className="space-y-3 pb-6">
-              <h2 className={`text-lg font-semibold ${theme.title}`}>
-                Expense history
-              </h2>
-              <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className={`text-lg font-semibold ${theme.title}`}>
+                  Expense history
+                </h2>
+              </div>
+              <div className="flex items-center justify-between gap-3">
                 <select
                   className="rounded-2xl border border-[#6A4DF5] bg-[#6A4DF5] px-3 py-2 text-xs font-semibold text-white outline-none"
                   onChange={(event) => setSelectedHistoryMonth(event.target.value)}
@@ -656,22 +733,38 @@ function App() {
                     </option>
                   ))}
                 </select>
-                <div className="grid grid-cols-3 rounded-2xl bg-[#202020] p-1 text-xs font-semibold">
-                  {['day', 'week', 'month'].map((filter) => (
+                <div className="grid grid-cols-4 rounded-2xl bg-[#202020] p-1 text-xs font-semibold">
+                  {[1, 2, 3, 4].map((week) => (
                     <button
-                      className={`rounded-xl px-3 py-2 capitalize ${
-                        historyFilter === filter
+                      className={`rounded-xl px-4 py-2 ${
+                        historyWeek === week
                           ? 'bg-[#6A4DF5] text-white'
                           : 'text-slate-400'
                       }`}
-                      key={filter}
-                      onClick={() => setHistoryFilter(filter)}
+                      key={week}
+                      onClick={() => setHistoryWeek(week)}
                       type="button"
                     >
-                      {filter}
+                      W{week}
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className={`rounded-[2rem] border p-4 ${theme.card}`}>
+                <div className="mb-1 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      Weekly spending
+                    </p>
+                    <p className={`text-xs ${theme.muted}`}>
+                      Week {historyWeek} · {formatExpenseMonth(selectedHistoryMonth)}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#eeeaff] px-3 py-1 text-xs font-semibold text-[#6A4DF5]">
+                    Expense
+                  </span>
+                </div>
+                <SpendingGraph points={historyGraphData} variant="card" />
               </div>
               {groupedExpenseHistory.map((monthGroup) => (
                 <div className="space-y-3" key={monthGroup.month}>
@@ -735,10 +828,10 @@ function App() {
                 </div>
               </div>
 
-              <div className="absolute bottom-0 left-0 right-0 grid grid-cols-3 gap-3 bg-white/10 p-4 backdrop-blur">
-                <ClosetDockButton icon={Shirt} label="Closet" />
-                <ClosetDockButton icon={Home} label="Room" />
-                <ClosetDockButton icon={ShoppingBag} label="Shop" />
+              <div className="absolute bottom-5 left-0 right-0 z-10 grid grid-cols-3 px-8">
+                <ClosetDockButton icon={Shirt} label="Closet" tone="violet" />
+                <ClosetDockButton icon={Home} label="Room" tone="sky" />
+                <ClosetDockButton icon={ShoppingBag} label="Shop" tone="gold" />
               </div>
             </div>
           </section>
@@ -902,6 +995,209 @@ function BadiNavIcon({ size = 19 }) {
   )
 }
 
+function getSpendingGraphData(expenses, selectedMonth, selectedWeek = null) {
+  const byDate = expenses
+    .filter((expense) => getExpenseMonthKey(expense.date) === selectedMonth)
+    .filter((expense) => {
+      if (!selectedWeek) return true
+      const date = new Date(`${expense.date}T00:00:00`)
+      return getWeekOfMonth(date) === selectedWeek
+    })
+    .reduce((groups, expense) => {
+    groups[expense.date] = (groups[expense.date] || 0) + expense.amount
+    return groups
+  }, {})
+
+  const points = Object.entries(byDate)
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .slice(-7)
+    .map(([date, amount]) => ({
+      date,
+      amount,
+      label: new Date(`${date}T00:00:00`).toLocaleDateString('en-MY', {
+        day: '2-digit',
+        month: 'short',
+      }),
+    }))
+
+  if (points.length > 1) return points
+  if (points.length === 1) {
+    return [
+      { ...points[0], amount: Math.max(points[0].amount * 0.55, 1) },
+      points[0],
+    ]
+  }
+
+  return [
+    { date: `${selectedMonth}-07`, amount: 12, label: '07' },
+    { date: `${selectedMonth}-14`, amount: 28, label: '14' },
+    { date: `${selectedMonth}-21`, amount: 18, label: '21' },
+    { date: `${selectedMonth}-28`, amount: 36, label: '28' },
+  ]
+}
+
+function getTodayStats(expenses, safeSpend) {
+  const today = new Date().toISOString().slice(0, 10)
+  const latestExpenseDate = [...expenses]
+    .sort((a, b) => b.date.localeCompare(a.date))[0]?.date
+  const hasTodayExpenses = expenses.some((expense) => expense.date === today)
+  const targetDate = hasTodayExpenses ? today : latestExpenseDate || today
+  const dayExpenses = expenses.filter((expense) => expense.date === targetDate)
+  const spent = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const remaining = Math.max(safeSpend - spent, 0)
+  const progress = Math.min((spent / Math.max(safeSpend, 1)) * 100, 100)
+  const categoryTotals = dayExpenses.reduce((totals, expense) => {
+    totals[expense.budgetName] = (totals[expense.budgetName] || 0) + expense.amount
+    return totals
+  }, {})
+  const topCategory =
+    Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] || 'None'
+  const status =
+    progress >= 100 ? 'Over limit' : progress >= 75 ? 'Watch spending' : 'On track'
+
+  return {
+    count: dayExpenses.length,
+    date: targetDate,
+    progress,
+    remaining,
+    safeSpend,
+    spent,
+    status,
+    topCategory,
+  }
+}
+
+function TodayInsight({ stats }) {
+  const radius = 42
+  const circumference = 2 * Math.PI * radius
+  const strokeOffset = circumference - (stats.progress / 100) * circumference
+
+  return (
+    <div className="mt-4 rounded-3xl bg-white/10 p-4 ring-1 ring-white/15">
+      <div className="flex items-center gap-4">
+        <div className="relative grid size-28 shrink-0 place-items-center">
+          <svg className="size-28 -rotate-90" viewBox="0 0 112 112">
+            <circle
+              cx="56"
+              cy="56"
+              fill="none"
+              r={radius}
+              stroke="rgba(255,255,255,.18)"
+              strokeWidth="12"
+            />
+            <circle
+              cx="56"
+              cy="56"
+              fill="none"
+              r={radius}
+              stroke="white"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeOffset}
+              strokeLinecap="round"
+              strokeWidth="12"
+            />
+          </svg>
+          <div className="absolute inset-0 grid place-items-center text-center">
+            <div>
+              <p className="text-xl font-bold leading-none">RM{stats.spent}</p>
+              <p className="mt-1 text-[11px] font-semibold text-white/65">
+                spent
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          <InsightPill label="Left today" value={`RM${stats.remaining}`} />
+          <InsightPill label="Top category" value={stats.topCategory} />
+          <InsightPill label="Daily status" value={stats.status} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InsightPill({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-white/10 px-3 py-2">
+      <p className="text-[11px] font-medium text-white/60">{label}</p>
+      <p className="truncate text-sm font-semibold text-white">{value}</p>
+    </div>
+  )
+}
+
+function SpendingGraph({ points, variant = 'purple' }) {
+  const isCard = variant === 'card'
+  const maxAmount = Math.max(...points.map((point) => point.amount), 1)
+  const width = 320
+  const height = 116
+  const chartPoints = points.map((point, index) => {
+    const x = points.length === 1 ? width / 2 : (index / (points.length - 1)) * width
+    const y = height - (point.amount / maxAmount) * (height - 22) - 10
+    return { ...point, x, y }
+  })
+  const line = chartPoints
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ')
+  const area = `${line} L ${width} ${height} L 0 ${height} Z`
+
+  return (
+    <div
+      className={`mt-4 rounded-3xl p-3 ${
+        isCard ? 'bg-[#202020]' : 'bg-white/10 ring-1 ring-white/15'
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-between text-xs">
+        <span className={isCard ? 'font-semibold text-slate-100' : 'font-semibold text-white'}>
+          Daily spending
+        </span>
+        <span className={isCard ? 'text-slate-400' : 'text-white/70'}>
+          Peak RM{maxAmount}
+        </span>
+      </div>
+      <svg
+        className="h-32 w-full overflow-visible"
+        viewBox={`0 0 ${width} ${height + 22}`}
+      >
+        {[0, 1, 2].map((lineIndex) => (
+          <line
+            key={lineIndex}
+            stroke={isCard ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.14)'}
+            strokeDasharray="4 6"
+            x1="0"
+            x2={width}
+            y1={20 + lineIndex * 44}
+            y2={20 + lineIndex * 44}
+          />
+        ))}
+        <path d={area} fill={isCard ? 'rgba(106,77,245,.2)' : 'rgba(255,255,255,.14)'} />
+        <path
+          d={line}
+          fill="none"
+          stroke={isCard ? '#8f7dff' : 'white'}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="5"
+        />
+        {chartPoints.map((point) => (
+          <g key={point.date}>
+            <circle cx={point.x} cy={point.y} fill="#6A4DF5" r="7" />
+            <circle cx={point.x} cy={point.y} fill={isCard ? '#f8fafc' : 'white'} r="3" />
+            <text
+              fill={isCard ? 'rgba(226,232,240,.72)' : 'rgba(255,255,255,.72)'}
+              fontSize="11"
+              textAnchor="middle"
+              x={point.x}
+              y={height + 18}
+            >
+              {point.label}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
 function formatExpenseDate(dateString) {
   const date = new Date(`${dateString}T00:00:00`)
   return date.toLocaleDateString('en-MY', {
@@ -1010,7 +1306,7 @@ function getExpenseMonths(expenses) {
     }))
 }
 
-function groupExpenses(expenses, filter, selectedMonth) {
+function groupExpenses(expenses, selectedWeek, selectedMonth) {
   const sorted = [...expenses].sort(
     (a, b) => new Date(b.date) - new Date(a.date),
   )
@@ -1018,18 +1314,17 @@ function groupExpenses(expenses, filter, selectedMonth) {
 
   sorted
     .filter((expense) => getExpenseMonthKey(expense.date) === selectedMonth)
+    .filter((expense) => {
+      const date = new Date(`${expense.date}T00:00:00`)
+      return getWeekOfMonth(date) === selectedWeek
+    })
     .forEach((expense) => {
     const date = new Date(`${expense.date}T00:00:00`)
     const month = date.toLocaleDateString('en-MY', {
       month: 'long',
       year: 'numeric',
     })
-    const week =
-      filter === 'day'
-        ? formatExpenseDate(expense.date)
-        : filter === 'week'
-          ? `Week ${getWeekOfMonth(date)}`
-          : 'All expenses'
+    const week = formatExpenseDate(expense.date)
     let monthGroup = months.find((item) => item.month === month)
 
     if (!monthGroup) {
@@ -1082,34 +1377,70 @@ function CoinsIcon() {
   )
 }
 
-function ClosetDockButton({ icon: Icon, label }) {
+function ClosetDockButton({ icon: Icon, label, tone }) {
+  const tones = {
+    gold: 'from-amber-200 to-orange-300 text-amber-950 shadow-orange-950/25',
+    sky: 'from-sky-200 to-cyan-300 text-sky-950 shadow-sky-950/25',
+    violet: 'from-violet-200 to-[#b6a7ff] text-[#322070] shadow-violet-950/25',
+  }
+
   return (
-    <button className="flex flex-col items-center gap-1 rounded-3xl border border-white/50 bg-white p-3 text-xs font-bold text-slate-800 shadow-lg">
-      <div className="grid size-12 place-items-center rounded-2xl bg-[#eeeaff] text-[#6A4DF5]">
-        <Icon size={24} />
+    <button
+      className="group flex flex-col items-center gap-1 justify-self-center text-xs font-black text-white [text-shadow:0_2px_0_rgba(0,0,0,.35)]"
+      type="button"
+    >
+      <div
+        className={`grid size-[4.35rem] place-items-center rounded-full border-[3px] border-white bg-gradient-to-b ${tones[tone]} shadow-xl transition-transform group-active:translate-y-1`}
+      >
+        <div className="grid size-12 place-items-center rounded-full bg-white/35 ring-1 ring-white/45">
+          <Icon size={27} strokeWidth={2.8} />
+        </div>
       </div>
-      {label}
+      <span className="rounded-full bg-black/20 px-3 py-0.5 backdrop-blur-sm">
+        {label}
+      </span>
     </button>
   )
 }
 
 function CardActions({ onDelete, onEdit }) {
+  const [isOpen, setIsOpen] = useState(false)
+
   return (
-    <div className="flex items-center gap-1">
+    <div className="relative">
       <button
-        className="grid size-8 place-items-center rounded-xl bg-white/10 text-slate-300 hover:text-white"
-        onClick={onEdit}
+        className="grid size-8 place-items-center rounded-xl text-slate-400 hover:bg-white/10 hover:text-white"
+        onClick={() => setIsOpen((current) => !current)}
         type="button"
       >
-        <Edit3 size={15} />
+        <MoreHorizontal size={18} />
       </button>
-      <button
-        className="grid size-8 place-items-center rounded-xl bg-white/10 text-rose-300 hover:text-rose-200"
-        onClick={onDelete}
-        type="button"
-      >
-        <Trash2 size={15} />
-      </button>
+      {isOpen && (
+        <div className="absolute right-0 top-9 z-20 w-28 overflow-hidden rounded-2xl border border-white/10 bg-[#202020] p-1 shadow-xl shadow-black/30">
+          <button
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/10"
+            onClick={() => {
+              setIsOpen(false)
+              onEdit()
+            }}
+            type="button"
+          >
+            <Edit3 size={13} />
+            Edit
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-300 hover:bg-white/10"
+            onClick={() => {
+              setIsOpen(false)
+              onDelete()
+            }}
+            type="button"
+          >
+            <Trash2 size={13} />
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }
