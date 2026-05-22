@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   Banknote,
+  Edit3,
   Home,
   Moon,
   Plus,
@@ -8,6 +9,7 @@ import {
   ShoppingBag,
   Sun,
   Target,
+  Trash2,
   Trophy,
   WalletCards,
   X,
@@ -19,6 +21,10 @@ function App() {
   const [isDark, setIsDark] = useState(true)
   const [coins, setCoins] = useState(85)
   const [activeForm, setActiveForm] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [historyFilter, setHistoryFilter] = useState('month')
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState('2026-05')
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [walletForm, setWalletForm] = useState({
     name: '',
     type: 'Bank',
@@ -28,6 +34,13 @@ function App() {
     name: '',
     limit: '',
   })
+  const [expenseForm, setExpenseForm] = useState({
+    amount: '',
+    accountId: '',
+    budgetId: '',
+    date: new Date().toISOString().slice(0, 10),
+    note: '',
+  })
   const [equipped] = useState({
     outfit: 'Mint hoodie',
     accessory: 'Round glasses',
@@ -35,26 +48,53 @@ function App() {
   })
 
   const [accounts, setAccounts] = useState([
-    { name: 'Maybank', type: 'Bank', balance: 820, tone: 'bg-[#eeeaff]' },
-    { name: 'CIMB', type: 'Bank', balance: 360, tone: 'bg-slate-100' },
-    { name: 'Cash', type: 'Cash', balance: 90, tone: 'bg-zinc-100' },
-    { name: 'TNG eWallet', type: 'E-wallet', balance: 74, tone: 'bg-[#f3f1ff]' },
-    { name: 'SPayLater', type: 'Pay later', balance: -120, tone: 'bg-rose-50' },
-    { name: 'GrabPay', type: 'E-wallet', balance: 48, tone: 'bg-[#eeeaff]' },
-    { name: 'ShopeePay', type: 'E-wallet', balance: 32, tone: 'bg-zinc-100' },
-    { name: 'Savings', type: 'Saving', balance: 500, tone: 'bg-[#f3f1ff]' },
-    { name: 'Credit Card', type: 'Credit', balance: -280, tone: 'bg-rose-50' },
+    { id: 1, name: 'Maybank', type: 'Bank', balance: 820, tone: 'bg-[#eeeaff]' },
+    { id: 2, name: 'CIMB', type: 'Bank', balance: 360, tone: 'bg-slate-100' },
+    { id: 3, name: 'Cash', type: 'Cash', balance: 90, tone: 'bg-zinc-100' },
+    { id: 4, name: 'TNG eWallet', type: 'E-wallet', balance: 74, tone: 'bg-[#f3f1ff]' },
+    { id: 5, name: 'SPayLater', type: 'Pay later', balance: -120, tone: 'bg-rose-50' },
+    { id: 6, name: 'GrabPay', type: 'E-wallet', balance: 48, tone: 'bg-[#eeeaff]' },
+    { id: 7, name: 'ShopeePay', type: 'E-wallet', balance: 32, tone: 'bg-zinc-100' },
+    { id: 8, name: 'Savings', type: 'Saving', balance: 500, tone: 'bg-[#f3f1ff]' },
+    { id: 9, name: 'Credit Card', type: 'Credit', balance: -280, tone: 'bg-rose-50' },
   ])
 
   const [budgets, setBudgets] = useState([
-    { name: 'Food', spent: 310, limit: 500, color: 'bg-[#6A4DF5]' },
-    { name: 'Transport', spent: 92, limit: 180, color: 'bg-slate-700' },
-    { name: 'Shopping', spent: 210, limit: 260, color: 'bg-zinc-500' },
-    { name: 'Bills', spent: 160, limit: 300, color: 'bg-[#9787ff]' },
-    { name: 'Groceries', spent: 240, limit: 420, color: 'bg-[#6A4DF5]' },
-    { name: 'Entertainment', spent: 85, limit: 150, color: 'bg-slate-700' },
-    { name: 'Health', spent: 45, limit: 120, color: 'bg-zinc-500' },
-    { name: 'Savings', spent: 180, limit: 300, color: 'bg-[#9787ff]' },
+    { id: 1, name: 'Food', spent: 310, limit: 500, color: 'bg-[#6A4DF5]' },
+    { id: 2, name: 'Transport', spent: 92, limit: 180, color: 'bg-slate-700' },
+    { id: 3, name: 'Shopping', spent: 210, limit: 260, color: 'bg-zinc-500' },
+    { id: 4, name: 'Bills', spent: 160, limit: 300, color: 'bg-[#9787ff]' },
+    { id: 5, name: 'Groceries', spent: 240, limit: 420, color: 'bg-[#6A4DF5]' },
+    { id: 6, name: 'Entertainment', spent: 85, limit: 150, color: 'bg-slate-700' },
+    { id: 7, name: 'Health', spent: 45, limit: 120, color: 'bg-zinc-500' },
+    { id: 8, name: 'Savings', spent: 180, limit: 300, color: 'bg-[#9787ff]' },
+  ])
+
+  const [expenses, setExpenses] = useState([
+    {
+      id: 1,
+      amount: 18,
+      accountName: 'TNG eWallet',
+      budgetName: 'Food',
+      date: '2026-05-22',
+      note: 'Lunch',
+    },
+    {
+      id: 2,
+      amount: 12,
+      accountName: 'Cash',
+      budgetName: 'Transport',
+      date: '2026-05-21',
+      note: 'Train',
+    },
+    {
+      id: 3,
+      amount: 45,
+      accountName: 'Maybank',
+      budgetName: 'Groceries',
+      date: '2026-05-15',
+      note: 'Snacks and drinks',
+    },
   ])
 
   const quests = [
@@ -76,51 +116,183 @@ function App() {
     safeSpend: 42,
   }
   const badiMood = totals.safeSpend >= 40 ? 'Calm' : 'Careful'
+  const historyMonths = getExpenseMonths(expenses)
+  const groupedExpenseHistory = groupExpenses(
+    expenses,
+    historyFilter,
+    selectedHistoryMonth,
+  )
 
   const completeQuest = (coinReward) => {
     setCoins((current) => current + coinReward)
   }
 
-  const addWallet = (event) => {
+  const closeForm = () => {
+    setActiveForm(null)
+    setEditingId(null)
+    setWalletForm({ name: '', type: 'Bank', balance: '' })
+    setBudgetForm({ name: '', limit: '' })
+    setExpenseForm({
+      amount: '',
+      accountId: '',
+      budgetId: '',
+      date: new Date().toISOString().slice(0, 10),
+      note: '',
+    })
+    setIsCalendarOpen(false)
+  }
+
+  const openAddWallet = () => {
+    setEditingId(null)
+    setWalletForm({ name: '', type: 'Bank', balance: '' })
+    setActiveForm('wallet')
+  }
+
+  const openEditWallet = (account) => {
+    setEditingId(account.id)
+    setWalletForm({
+      name: account.name,
+      type: account.type,
+      balance: String(Math.abs(account.balance)),
+    })
+    setActiveForm('wallet')
+  }
+
+  const openAddBudget = () => {
+    setEditingId(null)
+    setBudgetForm({ name: '', limit: '' })
+    setActiveForm('budget')
+  }
+
+  const openEditBudget = (budget) => {
+    setEditingId(budget.id)
+    setBudgetForm({
+      name: budget.name,
+      limit: String(budget.limit),
+    })
+    setActiveForm('budget')
+  }
+
+  const deleteWallet = (id) => {
+    setAccounts((current) => current.filter((account) => account.id !== id))
+  }
+
+  const deleteBudget = (id) => {
+    setBudgets((current) => current.filter((budget) => budget.id !== id))
+  }
+
+  const saveWallet = (event) => {
     event.preventDefault()
     const amount = Number(walletForm.balance)
     if (!walletForm.name.trim() || Number.isNaN(amount)) return
 
     const shouldBeDebt = ['Credit', 'Pay later'].includes(walletForm.type)
-    setAccounts((current) => [
-      {
-        name: walletForm.name.trim(),
-        type: walletForm.type,
-        balance: shouldBeDebt && amount > 0 ? -amount : amount,
-        tone: shouldBeDebt ? 'bg-rose-50' : 'bg-[#eeeaff]',
-      },
-      ...current,
-    ])
-    setWalletForm({ name: '', type: 'Bank', balance: '' })
-    setActiveForm(null)
+    const walletData = {
+      name: walletForm.name.trim(),
+      type: walletForm.type,
+      balance: shouldBeDebt && amount > 0 ? -amount : amount,
+      tone: shouldBeDebt ? 'bg-rose-50' : 'bg-[#eeeaff]',
+    }
+
+    if (editingId) {
+      setAccounts((current) =>
+        current.map((account) =>
+          account.id === editingId ? { ...account, ...walletData } : account,
+        ),
+      )
+    } else {
+      setAccounts((current) => [
+        {
+          id: Date.now(),
+          ...walletData,
+        },
+        ...current,
+      ])
+    }
+    closeForm()
   }
 
-  const addBudget = (event) => {
+  const saveBudget = (event) => {
     event.preventDefault()
     const limit = Number(budgetForm.limit)
     if (!budgetForm.name.trim() || Number.isNaN(limit) || limit <= 0) return
 
-    setBudgets((current) => [
+    if (editingId) {
+      setBudgets((current) =>
+        current.map((budget) =>
+          budget.id === editingId
+            ? {
+                ...budget,
+                name: budgetForm.name.trim(),
+                limit,
+              }
+            : budget,
+        ),
+      )
+    } else {
+      setBudgets((current) => [
+        {
+          id: Date.now(),
+          name: budgetForm.name.trim(),
+          spent: 0,
+          limit,
+          color: 'bg-[#6A4DF5]',
+        },
+        ...current,
+      ])
+    }
+    closeForm()
+  }
+
+  const saveExpense = (event) => {
+    event.preventDefault()
+    const amount = Number(expenseForm.amount)
+    const accountId = Number(expenseForm.accountId)
+    const budgetId = Number(expenseForm.budgetId)
+    const account = accounts.find((item) => item.id === accountId)
+    const budget = budgets.find((item) => item.id === budgetId)
+
+    if (Number.isNaN(amount) || amount <= 0 || !account || !budget) return
+
+    setAccounts((current) =>
+      current.map((account) =>
+        account.id === accountId
+          ? { ...account, balance: account.balance - amount }
+          : account,
+      ),
+    )
+    setBudgets((current) =>
+      current.map((budget) =>
+        budget.id === budgetId
+          ? { ...budget, spent: budget.spent + amount }
+          : budget,
+      ),
+    )
+    setExpenses((current) => [
       {
-        name: budgetForm.name.trim(),
-        spent: 0,
-        limit,
-        color: 'bg-[#6A4DF5]',
+        id: Date.now(),
+        amount,
+        accountName: account.name,
+        budgetName: budget.name,
+        date: expenseForm.date || new Date().toISOString().slice(0, 10),
+        note: expenseForm.note.trim() || 'Expense',
       },
       ...current,
     ])
-    setBudgetForm({ name: '', limit: '' })
-    setActiveForm(null)
+    setExpenseForm({
+      amount: '',
+      accountId: accounts[0]?.id ? String(accounts[0].id) : '',
+      budgetId: budgets[0]?.id ? String(budgets[0].id) : '',
+      date: new Date().toISOString().slice(0, 10),
+      note: '',
+    })
+    setIsCalendarOpen(false)
   }
 
   const tabs = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'wallets', label: 'Wallets', icon: WalletCards },
+    { id: 'expense', label: 'Add', icon: Plus },
     { id: 'budgets', label: 'Budgets', icon: Target },
     { id: 'closet', label: 'Badi', icon: BadiNavIcon },
   ]
@@ -258,18 +430,24 @@ function App() {
               title="Wallets"
               subtitle="Track banks, cash, e-wallets, and pay-later."
               isDark={isDark}
-              onAction={() => setActiveForm('wallet')}
+              onAction={openAddWallet}
             />
             <div className="grid grid-cols-2 gap-3 pb-6">
               {accounts.map((account) => (
                 <div
                   className={`min-h-40 rounded-2xl border p-4 shadow-sm ${theme.card}`}
-                  key={account.name}
+                  key={account.id}
                 >
-                  <div
-                    className={`grid size-12 place-items-center rounded-xl ${account.tone} text-[#6A4DF5]`}
-                  >
-                    <Banknote size={21} />
+                  <div className="flex items-start justify-between gap-2">
+                    <div
+                      className={`grid size-12 place-items-center rounded-xl ${account.tone} text-[#6A4DF5]`}
+                    >
+                      <Banknote size={21} />
+                    </div>
+                    <CardActions
+                      onDelete={() => deleteWallet(account.id)}
+                      onEdit={() => openEditWallet(account)}
+                    />
                   </div>
                   <p className="mt-4 text-base font-semibold leading-tight">
                     {account.name}
@@ -301,7 +479,7 @@ function App() {
               title="Budgets"
               subtitle="Simple category limits with progress."
               isDark={isDark}
-              onAction={() => setActiveForm('budget')}
+              onAction={openAddBudget}
             />
             <div className="grid grid-cols-2 gap-3 pb-6">
               {budgets.map((budget) => {
@@ -312,7 +490,7 @@ function App() {
                 return (
                   <div
                     className={`min-h-40 rounded-2xl border p-4 shadow-sm ${theme.card}`}
-                    key={budget.name}
+                    key={budget.id}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -323,9 +501,15 @@ function App() {
                           RM{budget.limit - budget.spent} left
                         </p>
                       </div>
-                      <span className="rounded-full bg-[#eeeaff] px-2 py-1 text-xs font-semibold text-[#6A4DF5]">
-                        {Math.round(progress)}%
-                      </span>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className="rounded-full bg-[#eeeaff] px-2 py-1 text-xs font-semibold text-[#6A4DF5]">
+                          {Math.round(progress)}%
+                        </span>
+                        <CardActions
+                          onDelete={() => deleteBudget(budget.id)}
+                          onEdit={() => openEditBudget(budget)}
+                        />
+                      </div>
                     </div>
                     <p className="mt-5 text-xl font-semibold">
                       RM{budget.spent}
@@ -343,6 +527,181 @@ function App() {
                 )
               })}
             </div>
+          </section>
+        )}
+
+        {activeTab === 'expense' && (
+          <section className="space-y-4 pt-3">
+            <ActionHeader
+              icon={Plus}
+              title="Add Expense"
+              subtitle="Log spending and update your wallet and budget."
+              isDark={isDark}
+            />
+            <form
+              className={`space-y-4 rounded-[2rem] border p-4 shadow-sm ${theme.card}`}
+              onSubmit={saveExpense}
+            >
+              <Field label="Amount">
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                  inputMode="decimal"
+                  onChange={(event) =>
+                    setExpenseForm((current) => ({
+                      ...current,
+                      amount: event.target.value,
+                    }))
+                  }
+                  placeholder="25"
+                  type="number"
+                  value={expenseForm.amount}
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Paid from">
+                  <select
+                    className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                    onChange={(event) =>
+                      setExpenseForm((current) => ({
+                        ...current,
+                        accountId: event.target.value,
+                      }))
+                    }
+                    value={expenseForm.accountId}
+                  >
+                    <option value="">Wallet</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Budget">
+                  <select
+                    className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                    onChange={(event) =>
+                      setExpenseForm((current) => ({
+                        ...current,
+                        budgetId: event.target.value,
+                      }))
+                    }
+                    value={expenseForm.budgetId}
+                  >
+                    <option value="">Category</option>
+                    {budgets.map((budget) => (
+                      <option key={budget.id} value={budget.id}>
+                        {budget.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Date">
+                  <div className="relative">
+                    <button
+                      className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-left text-slate-100 outline-none focus:border-[#6A4DF5]"
+                      onClick={() => setIsCalendarOpen((current) => !current)}
+                      type="button"
+                    >
+                      {formatExpenseDate(expenseForm.date)}
+                    </button>
+                    {isCalendarOpen && (
+                      <CalendarPopover
+                        selectedDate={expenseForm.date}
+                        onSelect={(date) => {
+                          setExpenseForm((current) => ({
+                            ...current,
+                            date,
+                          }))
+                          setIsCalendarOpen(false)
+                        }}
+                      />
+                    )}
+                  </div>
+                </Field>
+                <Field label="Note">
+                  <input
+                    className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                    onChange={(event) =>
+                      setExpenseForm((current) => ({
+                        ...current,
+                        note: event.target.value,
+                      }))
+                    }
+                    placeholder="Lunch"
+                    value={expenseForm.note}
+                  />
+                </Field>
+              </div>
+              <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+                Save expense
+              </button>
+            </form>
+
+            <section className="space-y-3 pb-6">
+              <h2 className={`text-lg font-semibold ${theme.title}`}>
+                Expense history
+              </h2>
+              <div className="flex items-center justify-between gap-2">
+                <select
+                  className="rounded-2xl border border-[#6A4DF5] bg-[#6A4DF5] px-3 py-2 text-xs font-semibold text-white outline-none"
+                  onChange={(event) => setSelectedHistoryMonth(event.target.value)}
+                  value={selectedHistoryMonth}
+                >
+                  {historyMonths.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-3 rounded-2xl bg-[#202020] p-1 text-xs font-semibold">
+                  {['day', 'week', 'month'].map((filter) => (
+                    <button
+                      className={`rounded-xl px-3 py-2 capitalize ${
+                        historyFilter === filter
+                          ? 'bg-[#6A4DF5] text-white'
+                          : 'text-slate-400'
+                      }`}
+                      key={filter}
+                      onClick={() => setHistoryFilter(filter)}
+                      type="button"
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {groupedExpenseHistory.map((monthGroup) => (
+                <div className="space-y-3" key={monthGroup.month}>
+                  {monthGroup.weeks.map((weekGroup) => (
+                    <div className="space-y-2" key={weekGroup.week}>
+                      <p className={`text-sm font-medium ${theme.muted}`}>
+                        {weekGroup.week}
+                      </p>
+                      {weekGroup.items.map((expense) => (
+                        <div
+                          className={`flex items-center justify-between rounded-2xl border p-3 ${theme.card}`}
+                          key={expense.id}
+                        >
+                          <div>
+                            <p className="font-semibold">{expense.note}</p>
+                            <p className={`text-xs ${theme.muted}`}>
+                              {formatExpenseDate(expense.date)} ·{' '}
+                              {expense.budgetName} · {expense.accountName}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-rose-300">
+                            -RM{expense.amount}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </section>
           </section>
         )}
 
@@ -387,20 +746,33 @@ function App() {
       </section>
 
       <nav
-        className={`fixed bottom-0 left-1/2 grid w-full max-w-md -translate-x-1/2 grid-cols-4 border-t px-3 pb-4 pt-2 ${theme.nav}`}
+        className={`fixed bottom-0 left-1/2 grid w-full max-w-md -translate-x-1/2 grid-cols-5 border-t px-3 pb-4 pt-2 ${theme.nav}`}
       >
         {tabs.map((tab) => {
           const Icon = tab.icon
           const selected = activeTab === tab.id
+          const isAdd = tab.id === 'expense'
           return (
             <button
               className={`flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-xs font-medium ${
-                selected ? 'bg-[#eeeaff] text-[#6A4DF5]' : theme.navIdle
+                isAdd
+                  ? 'text-[#6A4DF5]'
+                  : selected
+                    ? 'bg-[#eeeaff] text-[#6A4DF5]'
+                    : theme.navIdle
               }`}
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={tab.action || (() => setActiveTab(tab.id))}
             >
-              <Icon size={19} />
+              <span
+                className={
+                  isAdd
+                    ? 'grid size-10 place-items-center rounded-full bg-[#6A4DF5] text-white shadow-lg shadow-[#6A4DF5]/30'
+                    : ''
+                }
+              >
+                <Icon size={isAdd ? 24 : 19} />
+              </span>
               {tab.label}
             </button>
           )
@@ -408,8 +780,11 @@ function App() {
       </nav>
 
       {activeForm === 'wallet' && (
-        <FormSheet title="Add Wallet" onClose={() => setActiveForm(null)}>
-          <form className="space-y-4" onSubmit={addWallet}>
+        <FormSheet
+          title={editingId ? 'Edit Wallet' : 'Add Wallet'}
+          onClose={closeForm}
+        >
+          <form className="space-y-4" onSubmit={saveWallet}>
             <Field label="Wallet name">
               <input
                 className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
@@ -458,15 +833,18 @@ function App() {
               />
             </Field>
             <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
-              Save wallet
+              {editingId ? 'Update wallet' : 'Save wallet'}
             </button>
           </form>
         </FormSheet>
       )}
 
       {activeForm === 'budget' && (
-        <FormSheet title="Add Budget" onClose={() => setActiveForm(null)}>
-          <form className="space-y-4" onSubmit={addBudget}>
+        <FormSheet
+          title={editingId ? 'Edit Budget' : 'Add Budget'}
+          onClose={closeForm}
+        >
+          <form className="space-y-4" onSubmit={saveBudget}>
             <Field label="Budget category">
               <input
                 className="w-full rounded-2xl border border-white/10 bg-[#202020] px-4 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
@@ -496,11 +874,12 @@ function App() {
               />
             </Field>
             <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
-              Save budget
+              {editingId ? 'Update budget' : 'Save budget'}
             </button>
           </form>
         </FormSheet>
       )}
+
     </main>
   )
 }
@@ -521,6 +900,154 @@ function BadiNavIcon({ size = 19 }) {
       </span>
     </span>
   )
+}
+
+function formatExpenseDate(dateString) {
+  const date = new Date(`${dateString}T00:00:00`)
+  return date.toLocaleDateString('en-MY', {
+    day: '2-digit',
+    month: 'short',
+    weekday: 'short',
+  })
+}
+
+function formatCalendarTitle(dateString) {
+  const date = new Date(`${dateString}T00:00:00`)
+  return date.toLocaleDateString('en-MY', {
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+function getCalendarDays(dateString) {
+  const selected = new Date(`${dateString}T00:00:00`)
+  const year = selected.getFullYear()
+  const month = selected.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDay = new Date(year, month, 1).getDay()
+  const blanks = Array.from({ length: firstDay }, (_, index) => ({
+    key: `blank-${index}`,
+    value: null,
+  }))
+  const days = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1
+    return {
+      key: `${year}-${month}-${day}`,
+      value: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      label: day,
+    }
+  })
+
+  return [...blanks, ...days]
+}
+
+function CalendarPopover({ onSelect, selectedDate }) {
+  return (
+    <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-3xl border border-white/10 bg-[#2f2e38] p-3 shadow-2xl shadow-black/40">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-100">
+          {formatCalendarTitle(selectedDate)}
+        </p>
+        <button
+          className="rounded-xl bg-[#202020] px-3 py-1 text-xs font-semibold text-slate-300"
+          onClick={() => onSelect(new Date().toISOString().slice(0, 10))}
+          type="button"
+        >
+          Today
+        </button>
+      </div>
+      <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-semibold text-slate-400">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+          <span key={`${day}-${index}`}>{day}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {getCalendarDays(selectedDate).map((day) =>
+          day.value ? (
+            <button
+              className={`grid aspect-square place-items-center rounded-xl text-sm font-semibold ${
+                day.value === selectedDate
+                  ? 'bg-[#6A4DF5] text-white'
+                  : 'bg-[#202020] text-slate-300'
+              }`}
+              key={day.key}
+              onClick={() => onSelect(day.value)}
+              type="button"
+            >
+              {day.label}
+            </button>
+          ) : (
+            <span key={day.key} />
+          ),
+        )}
+      </div>
+    </div>
+  )
+}
+
+function getWeekOfMonth(date) {
+  return Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay()) / 7)
+}
+
+function getExpenseMonthKey(dateString) {
+  return dateString.slice(0, 7)
+}
+
+function formatExpenseMonth(monthKey) {
+  const date = new Date(`${monthKey}-01T00:00:00`)
+  return date.toLocaleDateString('en-MY', {
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+function getExpenseMonths(expenses) {
+  return [...new Set(expenses.map((expense) => getExpenseMonthKey(expense.date)))]
+    .sort((a, b) => b.localeCompare(a))
+    .map((month) => ({
+      value: month,
+      label: formatExpenseMonth(month),
+    }))
+}
+
+function groupExpenses(expenses, filter, selectedMonth) {
+  const sorted = [...expenses].sort(
+    (a, b) => new Date(b.date) - new Date(a.date),
+  )
+  const months = []
+
+  sorted
+    .filter((expense) => getExpenseMonthKey(expense.date) === selectedMonth)
+    .forEach((expense) => {
+    const date = new Date(`${expense.date}T00:00:00`)
+    const month = date.toLocaleDateString('en-MY', {
+      month: 'long',
+      year: 'numeric',
+    })
+    const week =
+      filter === 'day'
+        ? formatExpenseDate(expense.date)
+        : filter === 'week'
+          ? `Week ${getWeekOfMonth(date)}`
+          : 'All expenses'
+    let monthGroup = months.find((item) => item.month === month)
+
+    if (!monthGroup) {
+      monthGroup = { month, weeks: [] }
+      months.push(monthGroup)
+    }
+
+    let weekGroup = monthGroup.weeks.find((item) => item.week === week)
+
+    if (!weekGroup) {
+      weekGroup = { week, items: [] }
+      monthGroup.weeks.push(weekGroup)
+    }
+
+    weekGroup.items.push(expense)
+  })
+
+  return months
 }
 
 function Badi({ equipped, large = false }) {
@@ -563,6 +1090,27 @@ function ClosetDockButton({ icon: Icon, label }) {
       </div>
       {label}
     </button>
+  )
+}
+
+function CardActions({ onDelete, onEdit }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        className="grid size-8 place-items-center rounded-xl bg-white/10 text-slate-300 hover:text-white"
+        onClick={onEdit}
+        type="button"
+      >
+        <Edit3 size={15} />
+      </button>
+      <button
+        className="grid size-8 place-items-center rounded-xl bg-white/10 text-rose-300 hover:text-rose-200"
+        onClick={onDelete}
+        type="button"
+      >
+        <Trash2 size={15} />
+      </button>
+    </div>
   )
 }
 
@@ -625,13 +1173,15 @@ function ActionHeader({ icon: Icon, title, subtitle, isDark, onAction }) {
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="mt-1 text-sm text-slate-300">{subtitle}</p>
       </div>
-      <button
-        className="grid size-11 place-items-center rounded-full bg-white text-[#6A4DF5]"
-        onClick={onAction}
-        type="button"
-      >
-        <Icon size={20} />
-      </button>
+      {onAction && (
+        <button
+          className="grid size-11 place-items-center rounded-full bg-white text-[#6A4DF5]"
+          onClick={onAction}
+          type="button"
+        >
+          <Icon size={20} />
+        </button>
+      )}
     </div>
   )
 }
