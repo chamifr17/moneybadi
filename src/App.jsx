@@ -5,11 +5,11 @@ import {
   LogOut,
   Mail,
   Home,
+  Glasses,
   MoreHorizontal,
   Moon,
+  Palette,
   Plus,
-  Shirt,
-  ShoppingBag,
   Sun,
   Target,
   Trash2,
@@ -18,10 +18,11 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 
 function App() {
+  const loadedUserRef = useRef('')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isAuthLoading, setIsAuthLoading] = useState(true)
   const [authError, setAuthError] = useState('')
@@ -33,18 +34,27 @@ function App() {
     password: '',
   })
   const [currentUser, setCurrentUser] = useState({
+    id: '',
     name: 'Chami',
-    email: 'chami@moneybadi.app',
+    email: 'chami@pennymon.app',
   })
+  const [dataError, setDataError] = useState('')
+  const [isDataLoading, setIsDataLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('home')
   const [isDark, setIsDark] = useState(true)
-  const [coins, setCoins] = useState(85)
+  const [coins, setCoins] = useState(0)
   const [activeForm, setActiveForm] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [historyWeek, setHistoryWeek] = useState(1)
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState('2026-05')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [isSpendCardFlipped, setIsSpendCardFlipped] = useState(false)
+  const [swipedExpenseId, setSwipedExpenseId] = useState(null)
+  const [touchStartX, setTouchStartX] = useState(null)
+  const [draggedExpense, setDraggedExpense] = useState({
+    id: null,
+    offset: 0,
+  })
   const [walletForm, setWalletForm] = useState({
     name: '',
     type: 'Bank',
@@ -61,77 +71,14 @@ function App() {
     date: new Date().toISOString().slice(0, 10),
     note: '',
   })
-  const [equipped] = useState({
-    outfit: 'Mint hoodie',
+  const [equipped, setEquipped] = useState({
     accessory: 'Round glasses',
     room: 'Cozy desk',
   })
 
-  const [accounts, setAccounts] = useState([
-    { id: 1, name: 'Maybank', type: 'Bank', balance: 820, tone: 'bg-[#eeeaff]' },
-    { id: 2, name: 'CIMB', type: 'Bank', balance: 360, tone: 'bg-slate-100' },
-    { id: 3, name: 'Cash', type: 'Cash', balance: 90, tone: 'bg-zinc-100' },
-    { id: 4, name: 'TNG eWallet', type: 'E-wallet', balance: 74, tone: 'bg-[#f3f1ff]' },
-    { id: 5, name: 'SPayLater', type: 'Pay later', balance: -120, tone: 'bg-rose-50' },
-    { id: 6, name: 'GrabPay', type: 'E-wallet', balance: 48, tone: 'bg-[#eeeaff]' },
-    { id: 7, name: 'ShopeePay', type: 'E-wallet', balance: 32, tone: 'bg-zinc-100' },
-    { id: 8, name: 'Savings', type: 'Saving', balance: 500, tone: 'bg-[#f3f1ff]' },
-    { id: 9, name: 'Credit Card', type: 'Credit', balance: -280, tone: 'bg-rose-50' },
-  ])
-
-  const [budgets, setBudgets] = useState([
-    { id: 1, name: 'Food', spent: 310, limit: 500, color: 'bg-[#6A4DF5]' },
-    { id: 2, name: 'Transport', spent: 92, limit: 180, color: 'bg-slate-700' },
-    { id: 3, name: 'Shopping', spent: 210, limit: 260, color: 'bg-zinc-500' },
-    { id: 4, name: 'Bills', spent: 160, limit: 300, color: 'bg-[#9787ff]' },
-    { id: 5, name: 'Groceries', spent: 240, limit: 420, color: 'bg-[#6A4DF5]' },
-    { id: 6, name: 'Entertainment', spent: 85, limit: 150, color: 'bg-slate-700' },
-    { id: 7, name: 'Health', spent: 45, limit: 120, color: 'bg-zinc-500' },
-    { id: 8, name: 'Savings', spent: 180, limit: 300, color: 'bg-[#9787ff]' },
-  ])
-
-  const [expenses, setExpenses] = useState([
-    {
-      id: 1,
-      amount: 18,
-      accountName: 'TNG eWallet',
-      budgetName: 'Food',
-      date: '2026-05-22',
-      note: 'Lunch',
-    },
-    {
-      id: 2,
-      amount: 12,
-      accountName: 'Cash',
-      budgetName: 'Transport',
-      date: '2026-05-21',
-      note: 'Train',
-    },
-    {
-      id: 3,
-      amount: 45,
-      accountName: 'Maybank',
-      budgetName: 'Groceries',
-      date: '2026-05-15',
-      note: 'Snacks and drinks',
-    },
-    {
-      id: 4,
-      amount: 28,
-      accountName: 'CIMB',
-      budgetName: 'Food',
-      date: '2026-04-28',
-      note: 'Dinner',
-    },
-    {
-      id: 5,
-      amount: 65,
-      accountName: 'Maybank',
-      budgetName: 'Shopping',
-      date: '2026-04-20',
-      note: 'Shirt',
-    },
-  ])
+  const [accounts, setAccounts] = useState([])
+  const [budgets, setBudgets] = useState([])
+  const [expenses, setExpenses] = useState([])
 
   const quests = [
     { title: 'Log one expense', reward: 15, done: true },
@@ -149,9 +96,9 @@ function App() {
     available,
     debt,
     trueBalance: available - debt,
-    safeSpend: 42,
+    safeSpend: calculateSafeSpend(accounts, budgets),
   }
-  const badiMood = totals.safeSpend >= 40 ? 'Calm' : 'Careful'
+  const pennyMonMood = totals.safeSpend >= 40 ? 'Calm' : 'Careful'
   const historyMonths = getExpenseMonths(expenses)
   const todayStats = getTodayStats(expenses, totals.safeSpend)
   const groupedExpenseHistory = groupExpenses(
@@ -164,6 +111,7 @@ function App() {
     selectedHistoryMonth,
     historyWeek,
   )
+  const hasCompletedSetup = accounts.length > 0 && budgets.length > 0
 
   useEffect(() => {
     const setUserFromSession = (session) => {
@@ -171,11 +119,12 @@ function App() {
 
       if (!user) {
         setIsAuthenticated(false)
-        setCurrentUser({ name: 'Chami', email: 'chami@moneybadi.app' })
+        setCurrentUser({ id: '', name: 'Chami', email: 'chami@pennymon.app' })
         return
       }
 
       setCurrentUser({
+        id: user.id,
         name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
         email: user.email || '',
       })
@@ -196,6 +145,69 @@ function App() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  const loadMoneyData = useCallback(async (userId) => {
+    setIsDataLoading(true)
+    setDataError('')
+
+    const [
+      { data: walletRows, error: walletError },
+      { data: budgetRows, error: budgetError },
+      { data: expenseRows, error: expenseError },
+      { data: profileRow, error: profileError },
+    ] = await Promise.all([
+      supabase.from('wallets').select('*').order('created_at', { ascending: true }),
+      supabase.from('budgets').select('*').order('created_at', { ascending: true }),
+      supabase.from('expenses').select('*').order('date', { ascending: false }),
+      supabase.from('pennymon_profiles').select('*').eq('user_id', userId).maybeSingle(),
+    ])
+
+    const error = walletError || budgetError || expenseError || profileError
+    if (error) {
+      setDataError(error.message)
+      setIsDataLoading(false)
+      return
+    }
+
+    setAccounts(walletRows.map(mapWalletRow))
+    setBudgets(budgetRows.map(mapBudgetRow))
+    setExpenses(expenseRows.map(mapExpenseRow))
+
+    if (profileRow) {
+      setCoins(profileRow.coins)
+      setEquipped({
+        accessory: profileRow.accessory,
+        room: profileRow.room,
+      })
+    }
+
+    setIsDataLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser.id) return
+    if (loadedUserRef.current === currentUser.id) return
+
+    loadedUserRef.current = currentUser.id
+
+    const timeoutId = window.setTimeout(() => {
+      loadMoneyData(currentUser.id)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [currentUser.id, isAuthenticated, loadMoneyData])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setExpenseForm((current) => ({
+        ...current,
+        accountId: current.accountId || accounts[0]?.id || '',
+        budgetId: current.budgetId || budgets[0]?.id || '',
+      }))
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [accounts, budgets])
 
   const submitAuth = async (event) => {
     event.preventDefault()
@@ -229,14 +241,25 @@ function App() {
       return
     }
 
-    if (authMode === 'signup' && !data.session) {
-      setAuthNotice('Account created. Check your email to confirm your signup.')
+    if (authMode === 'signup') {
+      if (data.session) {
+        await supabase.auth.signOut()
+        setIsAuthenticated(false)
+      }
+      setAuthMode('login')
+      setAuthForm((current) => ({
+        name: '',
+        email: current.email,
+        password: '',
+      }))
+      setAuthNotice('Account created. Login with your registered credentials.')
       setIsAuthLoading(false)
     }
   }
 
   const logout = async () => {
     await supabase.auth.signOut()
+    loadedUserRef.current = ''
     setIsAuthenticated(false)
     setActiveTab('home')
     setActiveForm(null)
@@ -246,8 +269,26 @@ function App() {
     setAuthNotice('')
   }
 
-  const completeQuest = (coinReward) => {
-    setCoins((current) => current + coinReward)
+  const completeQuest = async (coinReward) => {
+    const nextCoins = coins + coinReward
+    setCoins(nextCoins)
+
+    if (!currentUser.id) return
+
+    const { error } = await supabase
+      .from('pennymon_profiles')
+      .upsert(
+        {
+          user_id: currentUser.id,
+          coins: nextCoins,
+          mood: pennyMonMood,
+          accessory: equipped.accessory,
+          room: equipped.room,
+        },
+        { onConflict: 'user_id' },
+      )
+
+    if (error) setDataError(error.message)
   }
 
   const closeForm = () => {
@@ -296,18 +337,32 @@ function App() {
     setActiveForm('budget')
   }
 
-  const deleteWallet = (id) => {
+  const deleteWallet = async (id) => {
+    const { error } = await supabase.from('wallets').delete().eq('id', id)
+
+    if (error) {
+      setDataError(error.message)
+      return
+    }
+
     setAccounts((current) => current.filter((account) => account.id !== id))
   }
 
-  const deleteBudget = (id) => {
+  const deleteBudget = async (id) => {
+    const { error } = await supabase.from('budgets').delete().eq('id', id)
+
+    if (error) {
+      setDataError(error.message)
+      return
+    }
+
     setBudgets((current) => current.filter((budget) => budget.id !== id))
   }
 
-  const saveWallet = (event) => {
+  const saveWallet = async (event) => {
     event.preventDefault()
     const amount = Number(walletForm.balance)
-    if (!walletForm.name.trim() || Number.isNaN(amount)) return
+    if (!currentUser.id || !walletForm.name.trim() || Number.isNaN(amount)) return
 
     const shouldBeDebt = ['Credit', 'Pay later'].includes(walletForm.type)
     const walletData = {
@@ -318,90 +373,177 @@ function App() {
     }
 
     if (editingId) {
+      const { data, error } = await supabase
+        .from('wallets')
+        .update({
+          name: walletData.name,
+          type: walletData.type,
+          balance: walletData.balance,
+          tone: walletData.tone,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingId)
+        .select()
+        .single()
+
+      if (error) {
+        setDataError(error.message)
+        return
+      }
+
       setAccounts((current) =>
         current.map((account) =>
-          account.id === editingId ? { ...account, ...walletData } : account,
+          account.id === editingId ? mapWalletRow(data) : account,
         ),
       )
     } else {
-      setAccounts((current) => [
-        {
-          id: Date.now(),
-          ...walletData,
-        },
-        ...current,
-      ])
+      const { data, error } = await supabase
+        .from('wallets')
+        .insert({
+          user_id: currentUser.id,
+          name: walletData.name,
+          type: walletData.type,
+          balance: walletData.balance,
+          tone: walletData.tone,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        setDataError(error.message)
+        return
+      }
+
+      setAccounts((current) => [mapWalletRow(data), ...current])
     }
     closeForm()
   }
 
-  const saveBudget = (event) => {
+  const saveBudget = async (event) => {
     event.preventDefault()
     const limit = Number(budgetForm.limit)
-    if (!budgetForm.name.trim() || Number.isNaN(limit) || limit <= 0) return
+    if (!currentUser.id || !budgetForm.name.trim() || Number.isNaN(limit) || limit <= 0) return
 
     if (editingId) {
+      const { data, error } = await supabase
+        .from('budgets')
+        .update({
+          name: budgetForm.name.trim(),
+          limit_amount: limit,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingId)
+        .select()
+        .single()
+
+      if (error) {
+        setDataError(error.message)
+        return
+      }
+
       setBudgets((current) =>
         current.map((budget) =>
-          budget.id === editingId
-            ? {
-                ...budget,
-                name: budgetForm.name.trim(),
-                limit,
-              }
-            : budget,
+          budget.id === editingId ? mapBudgetRow(data) : budget,
         ),
       )
     } else {
-      setBudgets((current) => [
-        {
-          id: Date.now(),
+      const { data, error } = await supabase
+        .from('budgets')
+        .insert({
+          user_id: currentUser.id,
           name: budgetForm.name.trim(),
           spent: 0,
-          limit,
+          limit_amount: limit,
           color: 'bg-[#6A4DF5]',
-        },
-        ...current,
-      ])
+        })
+        .select()
+        .single()
+
+      if (error) {
+        setDataError(error.message)
+        return
+      }
+
+      setBudgets((current) => [mapBudgetRow(data), ...current])
     }
     closeForm()
   }
 
-  const saveExpense = (event) => {
+  const saveExpense = async (event) => {
     event.preventDefault()
     const amount = Number(expenseForm.amount)
-    const accountId = Number(expenseForm.accountId)
-    const budgetId = Number(expenseForm.budgetId)
+    const accountId = expenseForm.accountId
+    const budgetId = expenseForm.budgetId
     const account = accounts.find((item) => item.id === accountId)
     const budget = budgets.find((item) => item.id === budgetId)
 
-    if (Number.isNaN(amount) || amount <= 0 || !account || !budget) return
+    if (!currentUser.id || Number.isNaN(amount) || amount <= 0 || !account || !budget) return
+
+    const nextAccountBalance = account.balance - amount
+    const nextBudgetSpent = budget.spent + amount
+
+    const [
+      { data: walletRow, error: walletError },
+      { data: budgetRow, error: budgetError },
+      { data: expenseRow, error: expenseError },
+    ] = await Promise.all([
+      supabase
+        .from('wallets')
+        .update({
+          balance: nextAccountBalance,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', accountId)
+        .select()
+        .single(),
+      supabase
+        .from('budgets')
+        .update({
+          spent: nextBudgetSpent,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', budgetId)
+        .select()
+        .single(),
+      supabase
+        .from('expenses')
+        .insert({
+          user_id: currentUser.id,
+          wallet_id: accountId,
+          budget_id: budgetId,
+          account_name: account.name,
+          budget_name: budget.name,
+          amount,
+          date: expenseForm.date || new Date().toISOString().slice(0, 10),
+          note: expenseForm.note.trim() || 'Expense',
+        })
+        .select()
+        .single(),
+    ])
+
+    const error = walletError || budgetError || expenseError
+    if (error) {
+      setDataError(error.message)
+      return
+    }
 
     setAccounts((current) =>
       current.map((account) =>
         account.id === accountId
-          ? { ...account, balance: account.balance - amount }
+          ? mapWalletRow(walletRow)
           : account,
       ),
     )
     setBudgets((current) =>
       current.map((budget) =>
         budget.id === budgetId
-          ? { ...budget, spent: budget.spent + amount }
+          ? mapBudgetRow(budgetRow)
           : budget,
       ),
     )
-    setExpenses((current) => [
-      {
-        id: Date.now(),
-        amount,
-        accountName: account.name,
-        budgetName: budget.name,
-        date: expenseForm.date || new Date().toISOString().slice(0, 10),
-        note: expenseForm.note.trim() || 'Expense',
-      },
-      ...current,
-    ])
+    setExpenses((current) => [mapExpenseRow(expenseRow), ...current])
+    setSelectedHistoryMonth(getExpenseMonthKey(expenseRow.date))
+    setHistoryWeek(getWeekOfMonth(new Date(`${expenseRow.date}T00:00:00`)))
     setExpenseForm({
       amount: '',
       accountId: accounts[0]?.id ? String(accounts[0].id) : '',
@@ -412,12 +554,83 @@ function App() {
     setIsCalendarOpen(false)
   }
 
+  const deleteExpense = async (expense) => {
+    const account = accounts.find((item) => item.id === expense.walletId)
+    const budget = budgets.find((item) => item.id === expense.budgetId)
+    const nextAccountBalance = account ? account.balance + expense.amount : null
+    const nextBudgetSpent = budget
+      ? Math.max(budget.spent - expense.amount, 0)
+      : null
+
+    const requests = [
+      supabase.from('expenses').delete().eq('id', expense.id),
+    ]
+
+    if (account) {
+      requests.push(
+        supabase
+          .from('wallets')
+          .update({
+            balance: nextAccountBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', account.id)
+          .select()
+          .single(),
+      )
+    }
+
+    if (budget) {
+      requests.push(
+        supabase
+          .from('budgets')
+          .update({
+            spent: nextBudgetSpent,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', budget.id)
+          .select()
+          .single(),
+      )
+    }
+
+    const results = await Promise.all(requests)
+    const error = results.find((result) => result.error)?.error
+
+    if (error) {
+      setDataError(error.message)
+      return
+    }
+
+    setExpenses((current) => current.filter((item) => item.id !== expense.id))
+    if (account) {
+      setAccounts((current) =>
+        current.map((item) =>
+          item.id === account.id
+            ? mapWalletRow(results[1].data)
+            : item,
+        ),
+      )
+    }
+    if (budget) {
+      setBudgets((current) =>
+        current.map((item) =>
+          item.id === budget.id
+            ? mapBudgetRow(results[account ? 2 : 1].data)
+            : item,
+        ),
+      )
+    }
+    setSwipedExpenseId(null)
+    setDraggedExpense({ id: null, offset: 0 })
+  }
+
   const tabs = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'wallets', label: 'Wallets', icon: WalletCards },
     { id: 'expense', label: 'Add', icon: Plus },
     { id: 'budgets', label: 'Budgets', icon: Target },
-    { id: 'closet', label: 'Badi', icon: BadiNavIcon },
+    { id: 'pennymon', label: 'PennyMon', icon: PennyMonNavIcon },
   ]
 
   const theme = {
@@ -454,12 +667,12 @@ function App() {
 
   return (
     <main
-      className={`mx-auto flex h-screen max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow}`}
+      className={`mx-auto flex h-dvh max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow}`}
     >
-      {activeTab !== 'closet' && (
+      {activeTab !== 'pennymon' && (
         <header className="flex items-center justify-between px-5 pb-3 pt-5">
           <div>
-            <p className="text-sm font-semibold text-[#6A4DF5]">MoneyBadi</p>
+            <p className="text-sm font-semibold text-[#6A4DF5]">PennyMon</p>
             <h1 className={`text-2xl font-semibold ${theme.title}`}>
               Hi, {currentUser.name}
             </h1>
@@ -483,11 +696,25 @@ function App() {
         </header>
       )}
 
+      {activeTab !== 'pennymon' && (isDataLoading || dataError) && (
+        <div className={`px-5 pb-3 ${theme.page}`}>
+          <p
+            className={`rounded-2xl border px-3 py-2 text-xs font-semibold ${
+              dataError
+                ? 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                : 'border-white/10 bg-[#2f2e38] text-slate-300'
+            }`}
+          >
+            {dataError || 'Syncing your PennyMon data...'}
+          </p>
+        </div>
+      )}
+
       <section
         className={
-          activeTab === 'closet'
-            ? 'h-[calc(100vh-76px)] overflow-hidden'
-            : `flex-1 space-y-4 overflow-y-auto px-5 pb-24 ${theme.page}`
+          activeTab === 'pennymon'
+            ? 'min-h-0 flex-1 overflow-hidden'
+            : `min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5 ${theme.page}`
         }
       >
         {activeTab === 'home' && (
@@ -522,11 +749,11 @@ function App() {
                         safe to spend
                       </p>
                     </div>
-                    <Badi equipped={equipped} />
+                    <PennyMonPet equipped={equipped} />
                   </div>
                   <div className="mt-4 rounded-2xl bg-white/15 p-3 ring-1 ring-white/20 backdrop-blur">
                     <p className="text-sm font-medium text-white">
-                      Badi feels calm.
+                      PennyMon feels calm.
                     </p>
                     <p className="mt-1 text-sm text-white/75">
                       Food spending is moving fast. Review it today to keep your
@@ -622,38 +849,47 @@ function App() {
               isDark={isDark}
               onAction={openAddWallet}
             />
-            <div className="grid grid-cols-2 gap-3 pb-6">
+            <div className="space-y-3 pb-6">
+              {!accounts.length && (
+                <SetupHint
+                  message="Add your first wallet before logging expenses or customizing PennyMon."
+                />
+              )}
               {accounts.map((account) => (
                 <div
-                  className="relative min-h-36 rounded-3xl border border-white/10 bg-[#2b2b32] p-4 text-slate-100 shadow-sm"
+                  className="relative rounded-2xl border border-white/10 bg-[#2b2b32] p-3 text-slate-100 shadow-sm"
                   key={account.id}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold leading-tight">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-tight">
                         {account.name}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
                         {account.type}
                       </p>
                     </div>
-                    <CardActions
-                      onDelete={() => deleteWallet(account.id)}
-                      onEdit={() => openEditWallet(account)}
-                    />
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className="text-right">
+                        <p
+                          className={`text-lg font-semibold tracking-tight ${
+                            account.balance < 0
+                              ? 'text-rose-300'
+                              : ''
+                          }`}
+                        >
+                          RM{account.balance}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {account.balance < 0 ? 'Outstanding' : 'Available'}
+                        </p>
+                      </div>
+                      <CardActions
+                        onDelete={() => deleteWallet(account.id)}
+                        onEdit={() => openEditWallet(account)}
+                      />
+                    </div>
                   </div>
-                  <p
-                    className={`mt-8 text-2xl font-semibold tracking-tight ${
-                      account.balance < 0
-                        ? 'text-rose-300'
-                        : ''
-                    }`}
-                  >
-                    RM{account.balance}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {account.balance < 0 ? 'Outstanding' : 'Available balance'}
-                  </p>
                 </div>
               ))}
             </div>
@@ -669,7 +905,12 @@ function App() {
               isDark={isDark}
               onAction={openAddBudget}
             />
-            <div className="grid grid-cols-2 gap-3 pb-6">
+            <div className="space-y-3 pb-6">
+              {!budgets.length && (
+                <SetupHint
+                  message="Create your first budget to unlock expenses and PennyMon."
+                />
+              )}
               {budgets.map((budget) => {
                 const progress = Math.min(
                   (budget.spent / budget.limit) * 100,
@@ -677,16 +918,16 @@ function App() {
                 )
                 return (
                   <div
-                    className="relative min-h-36 rounded-3xl border border-white/10 bg-[#2b2b32] p-4 text-slate-100 shadow-sm"
+                    className="relative rounded-2xl border border-white/10 bg-[#2b2b32] p-3 text-slate-100 shadow-sm"
                     key={budget.id}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-base font-semibold leading-tight">
+                        <p className="text-sm font-semibold leading-tight">
                           {budget.name}
                         </p>
                         <p className="mt-1 text-xs text-slate-400">
-                          RM{budget.limit - budget.spent} left
+                          RM{budget.spent} / RM{budget.limit}
                         </p>
                       </div>
                       <CardActions
@@ -694,20 +935,21 @@ function App() {
                         onEdit={() => openEditBudget(budget)}
                       />
                     </div>
-                    <div className="mt-6 flex items-end justify-between gap-2">
-                      <div>
-                        <p className="text-2xl font-semibold tracking-tight">
-                          RM{budget.spent}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          of RM{budget.limit}
-                        </p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="h-3 flex-1 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-[#6A4DF5]"
+                          style={{ width: `${progress}%` }}
+                        />
                       </div>
-                      <span className="rounded-full bg-[#3a3748] px-2.5 py-1 text-xs font-semibold text-[#b9afff]">
+                      <span className="w-10 text-right text-xs font-semibold text-[#b9afff]">
                         {Math.round(progress)}%
                       </span>
                     </div>
-                    <div className="mt-4 h-1.5 rounded-full bg-white/10">
+                    <p className="mt-2 text-xs text-slate-500">
+                      RM{Math.max(budget.limit - budget.spent, 0)} left
+                    </p>
+                    {/* <div className="mt-4 h-1.5 rounded-full bg-white/10">
                       <div
                         className="h-full rounded-full bg-[#6A4DF5]"
                         style={{ width: `${progress}%` }}
@@ -802,27 +1044,13 @@ function App() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Date">
-                  <div className="relative">
-                    <button
-                      className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-left text-slate-100 outline-none focus:border-[#6A4DF5]"
-                      onClick={() => setIsCalendarOpen((current) => !current)}
-                      type="button"
-                    >
-                      {formatExpenseDate(expenseForm.date)}
-                    </button>
-                    {isCalendarOpen && (
-                      <CalendarPopover
-                        selectedDate={expenseForm.date}
-                        onSelect={(date) => {
-                          setExpenseForm((current) => ({
-                            ...current,
-                            date,
-                          }))
-                          setIsCalendarOpen(false)
-                        }}
-                      />
-                    )}
-                  </div>
+                  <button
+                    className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-left text-slate-100 outline-none focus:border-[#6A4DF5]"
+                    onClick={() => setIsCalendarOpen(true)}
+                    type="button"
+                  >
+                    {formatExpenseDate(expenseForm.date)}
+                  </button>
                 </Field>
                 <Field label="Note">
                   <input
@@ -842,6 +1070,20 @@ function App() {
                 Save expense
               </button>
             </form>
+
+            {isCalendarOpen && (
+              <CalendarPopover
+                selectedDate={expenseForm.date}
+                onClose={() => setIsCalendarOpen(false)}
+                onSelect={(date) => {
+                  setExpenseForm((current) => ({
+                    ...current,
+                    date,
+                  }))
+                  setIsCalendarOpen(false)
+                }}
+              />
+            )}
 
             <section className="space-y-3 pb-6">
               <div>
@@ -885,14 +1127,18 @@ function App() {
                       Weekly spending
                     </p>
                     <p className={`text-xs ${theme.muted}`}>
-                      Week {historyWeek} · {formatExpenseMonth(selectedHistoryMonth)}
+                      {formatWeekRange(selectedHistoryMonth, historyWeek)}
                     </p>
                   </div>
                   <span className="rounded-full bg-[#eeeaff] px-3 py-1 text-xs font-semibold text-[#6A4DF5]">
                     Expense
                   </span>
                 </div>
-                <SpendingGraph points={historyGraphData} variant="card" />
+                {historyGraphData.length ? (
+                  <SpendingGraph points={historyGraphData} variant="card" />
+                ) : (
+                  <EmptyGraphState />
+                )}
               </div>
               {groupedExpenseHistory.map((monthGroup) => (
                 <div className="space-y-3" key={monthGroup.month}>
@@ -902,20 +1148,58 @@ function App() {
                         {weekGroup.week}
                       </p>
                       {weekGroup.items.map((expense) => (
-                        <div
-                          className={`flex items-center justify-between rounded-2xl border p-3 ${theme.card}`}
-                          key={expense.id}
-                        >
-                          <div>
-                            <p className="font-semibold">{expense.note}</p>
-                            <p className={`text-xs ${theme.muted}`}>
-                              {formatExpenseDate(expense.date)} ·{' '}
-                              {expense.budgetName} · {expense.accountName}
+                        <div className="relative overflow-hidden rounded-2xl bg-[#8f1d2c]" key={expense.id}>
+                          <button
+                            className="absolute inset-y-0 right-0 grid w-20 place-items-center text-sm font-bold text-white"
+                            onClick={() => deleteExpense(expense)}
+                            type="button"
+                          >
+                            Delete
+                          </button>
+                          <div
+                            className={`relative flex touch-pan-y items-center justify-between rounded-2xl border p-3 will-change-transform ${theme.card}`}
+                            onTouchEnd={(event) => {
+                              if (touchStartX === null) return
+                              const deltaX = event.changedTouches[0].clientX - touchStartX
+                              setSwipedExpenseId(deltaX < -42 ? expense.id : null)
+                              setDraggedExpense({ id: null, offset: 0 })
+                              if (deltaX > 42) setSwipedExpenseId(null)
+                              setTouchStartX(null)
+                            }}
+                            onTouchMove={(event) => {
+                              if (touchStartX === null) return
+                              const deltaX = event.touches[0].clientX - touchStartX
+                              const offset = Math.max(Math.min(deltaX, 0), -86)
+                              setDraggedExpense({ id: expense.id, offset })
+                            }}
+                            onTouchStart={(event) => {
+                              setTouchStartX(event.touches[0].clientX)
+                              setSwipedExpenseId(null)
+                            }}
+                            style={{
+                              transform:
+                                draggedExpense.id === expense.id
+                                  ? `translateX(${draggedExpense.offset}px)`
+                                  : swipedExpenseId === expense.id
+                                    ? 'translateX(-80px)'
+                                    : 'translateX(0)',
+                              transition:
+                                draggedExpense.id === expense.id
+                                  ? 'none'
+                                  : 'transform 420ms cubic-bezier(.22,1,.36,1)',
+                            }}
+                          >
+                            <div>
+                              <p className="font-semibold">{expense.note}</p>
+                              <p className={`text-xs ${theme.muted}`}>
+                                {formatExpenseDate(expense.date)} ·{' '}
+                                {expense.budgetName} · {expense.accountName}
+                              </p>
+                            </div>
+                            <p className="font-semibold text-rose-300">
+                              -RM{expense.amount}
                             </p>
                           </div>
-                          <p className="font-semibold text-rose-300">
-                            -RM{expense.amount}
-                          </p>
                         </div>
                       ))}
                     </div>
@@ -926,9 +1210,9 @@ function App() {
           </section>
         )}
 
-        {activeTab === 'closet' && (
-          <section className="h-full">
-            <div className="relative h-full overflow-hidden bg-[#241c46] shadow-xl shadow-slate-300/60">
+        {activeTab === 'pennymon' && (
+          <section className="relative h-full overflow-hidden">
+            <div className="absolute inset-0 overflow-hidden bg-[#241c46] shadow-xl shadow-slate-300/60">
               <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(135deg,rgba(255,255,255,.22)_12%,transparent_12%,transparent_50%,rgba(255,255,255,.22)_50%,rgba(255,255,255,.22)_62%,transparent_62%,transparent)] [background-size:28px_28px]" />
               <div className="absolute left-4 right-4 top-4 z-10 flex items-center justify-between">
                 <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#2f2e38] px-3 py-2 text-sm font-bold text-slate-100 shadow-md">
@@ -936,30 +1220,30 @@ function App() {
                   {coins}
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-[#2f2e38] px-3 py-2 text-sm font-bold text-slate-100 shadow-md">
-                  Mood: {badiMood}
+                  Mood: {pennyMonMood}
                 </div>
               </div>
               <div className="relative px-5 pt-20 text-center">
                 <h2 className="text-lg font-black tracking-wide text-white [text-shadow:0_2px_0_rgba(0,0,0,.35)]">
-                  Badi Closet
+                  PennyMon
                 </h2>
                 <div className="mt-14">
-                  <Badi equipped={equipped} large />
+                  <PennyMonPet equipped={equipped} large />
                 </div>
                 <div className="hidden">
                   <p className="text-sm font-semibold text-slate-950">
                     Equipped
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {equipped.outfit} · {equipped.accessory} · {equipped.room}
+                    {equipped.accessory} · {equipped.room}
                   </p>
                 </div>
               </div>
 
               <div className="absolute bottom-5 left-0 right-0 z-10 grid grid-cols-3 px-8">
-                <ClosetDockButton icon={Shirt} label="Closet" tone="violet" />
-                <ClosetDockButton icon={Home} label="Room" tone="sky" />
-                <ClosetDockButton icon={ShoppingBag} label="Shop" tone="gold" />
+                <PennyMonDockButton icon={Glasses} label="Accessories" tone="violet" />
+                <PennyMonDockButton icon={Home} label="Room" tone="sky" />
+                <PennyMonDockButton icon={Palette} label="Colour" tone="gold" />
               </div>
             </div>
           </section>
@@ -967,34 +1251,42 @@ function App() {
       </section>
 
       <nav
-        className={`fixed bottom-0 left-1/2 grid w-full max-w-md -translate-x-1/2 grid-cols-5 border-t px-3 pb-4 pt-2 ${theme.nav}`}
+        className={`grid shrink-0 grid-cols-5 border-t px-3 pb-3 pt-2 ${theme.nav}`}
       >
         {tabs.map((tab) => {
           const Icon = tab.icon
           const selected = activeTab === tab.id
           const isAdd = tab.id === 'expense'
+          const isLocked = ['expense', 'pennymon'].includes(tab.id) && !hasCompletedSetup
           return (
             <button
               className={`flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-xs font-medium ${
-                isAdd
+                isLocked
+                  ? 'cursor-not-allowed text-slate-600'
+                  : isAdd
                   ? 'text-[#6A4DF5]'
                   : selected
                     ? 'bg-[#eeeaff] text-[#6A4DF5]'
                     : theme.navIdle
               }`}
               key={tab.id}
-              onClick={tab.action || (() => setActiveTab(tab.id))}
+              onClick={() => {
+                if (isLocked) return
+                setActiveTab(tab.id)
+              }}
             >
               <span
                 className={
-                  isAdd
+                  isLocked
+                    ? 'opacity-45'
+                    : isAdd
                     ? 'grid size-10 place-items-center rounded-full bg-[#6A4DF5] text-white shadow-lg shadow-[#6A4DF5]/30'
                     : ''
                 }
               >
                 <Icon size={isAdd ? 24 : 19} />
               </span>
-              {tab.label}
+              {isLocked ? 'Locked' : tab.label}
             </button>
           )
         })}
@@ -1015,7 +1307,7 @@ function App() {
                     name: event.target.value,
                   }))
                 }
-                placeholder="Maybank, Cash, TNG..."
+                placeholder="Bank Islam, Cash, E-wallet..."
                 value={walletForm.name}
               />
             </Field>
@@ -1105,7 +1397,7 @@ function App() {
   )
 }
 
-function BadiNavIcon({ size = 19 }) {
+function PennyMonNavIcon({ size = 19 }) {
   return (
     <span
       className="relative inline-grid place-items-center"
@@ -1148,20 +1440,7 @@ function getSpendingGraphData(expenses, selectedMonth, selectedWeek = null) {
       }),
     }))
 
-  if (points.length > 1) return points
-  if (points.length === 1) {
-    return [
-      { ...points[0], amount: Math.max(points[0].amount * 0.55, 1) },
-      points[0],
-    ]
-  }
-
-  return [
-    { date: `${selectedMonth}-07`, amount: 12, label: '07' },
-    { date: `${selectedMonth}-14`, amount: 28, label: '14' },
-    { date: `${selectedMonth}-21`, amount: 18, label: '21' },
-    { date: `${selectedMonth}-28`, amount: 36, label: '28' },
-  ]
+  return points
 }
 
 function getTodayStats(expenses, safeSpend) {
@@ -1178,8 +1457,21 @@ function getTodayStats(expenses, safeSpend) {
     totals[expense.budgetName] = (totals[expense.budgetName] || 0) + expense.amount
     return totals
   }, {})
-  const topCategory =
-    Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] || 'None'
+  const topCategories = Object.entries(categoryTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, amount]) => ({ name, amount }))
+  const sourceTotals = dayExpenses.reduce((totals, expense) => {
+    totals[expense.accountName] = (totals[expense.accountName] || 0) + expense.amount
+    return totals
+  }, {})
+  const sources = Object.entries(sourceTotals)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount]) => ({
+      name,
+      amount,
+      percent: spent ? Math.round((amount / spent) * 100) : 0,
+    }))
   const status =
     progress >= 100 ? 'Over limit' : progress >= 75 ? 'Watch spending' : 'On track'
 
@@ -1191,7 +1483,8 @@ function getTodayStats(expenses, safeSpend) {
     safeSpend,
     spent,
     status,
-    topCategory,
+    sources,
+    topCategories,
   }
 }
 
@@ -1235,20 +1528,93 @@ function TodayInsight({ stats }) {
           </div>
         </div>
         <div className="min-w-0 flex-1 space-y-2">
-          <InsightPill label="Left today" value={`RM${stats.remaining}`} />
-          <InsightPill label="Top category" value={stats.topCategory} />
-          <InsightPill label="Daily status" value={stats.status} />
+          {[0, 1, 2].map((index) => {
+            const category = stats.topCategories[index]
+
+            return (
+              <CategoryPill
+                key={category?.name || `empty-${index}`}
+                value={
+                  category
+                    ? `${category.name} · RM${category.amount}`
+                    : 'No expense'
+                }
+              />
+            )
+          })}
         </div>
+      </div>
+      <SourceBar sources={stats.sources} />
+    </div>
+  )
+}
+
+function CategoryPill({ value }) {
+  return (
+    <div className="rounded-2xl bg-white/10 px-3 py-2">
+      <p className="truncate text-sm font-semibold text-white">{value}</p>
+    </div>
+  )
+}
+
+function EmptyGraphState() {
+  return (
+    <div className="mt-4 rounded-3xl bg-[#202020] p-4">
+      <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 text-center">
+        <p className="text-sm font-semibold text-slate-200">
+          No spending yet
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Add an expense to see this graph.
+        </p>
       </div>
     </div>
   )
 }
 
-function InsightPill({ label, value }) {
+function SourceBar({ sources }) {
+  const colors = [
+    { bg: 'bg-white', text: 'text-white' },
+    { bg: 'bg-[#c8c0ff]', text: 'text-[#d9d4ff]' },
+    { bg: 'bg-[#62d6c8]', text: 'text-[#a8fff5]' },
+    { bg: 'bg-[#ffcf70]', text: 'text-[#ffe2a8]' },
+    { bg: 'bg-[#ff8aa5]', text: 'text-[#ffc0ce]' },
+  ]
+
   return (
-    <div className="rounded-2xl bg-white/10 px-3 py-2">
-      <p className="text-[11px] font-medium text-white/60">{label}</p>
-      <p className="truncate text-sm font-semibold text-white">{value}</p>
+    <div className="mt-3 rounded-2xl bg-white/10 p-3">
+      <div className="flex h-2 overflow-hidden rounded-full bg-white/15">
+        {sources.length ? (
+          sources.map((source, index) => (
+            <div
+              className={colors[index % colors.length].bg}
+              key={source.name}
+              style={{ width: `${source.percent}%` }}
+            />
+          ))
+        ) : (
+          <div className="w-full bg-white/20" />
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+        {sources.length ? (
+          sources.slice(0, 3).map((source, index) => (
+            <span
+              className={`text-[11px] font-semibold ${colors[index % colors.length].text}`}
+              key={source.name}
+            >
+              <span
+                className={`mr-1 inline-block size-2 rounded-full ${colors[index % colors.length].bg}`}
+              />
+              {source.name} {source.percent}%
+            </span>
+          ))
+        ) : (
+          <span className="text-[11px] font-semibold text-white/65">
+            No source data
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -1365,56 +1731,97 @@ function getCalendarDays(dateString) {
   return [...blanks, ...days]
 }
 
-function CalendarPopover({ onSelect, selectedDate }) {
+function CalendarPopover({ onClose, onSelect, selectedDate }) {
   return (
-    <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-3xl border border-white/10 bg-[#2f2e38] p-3 shadow-2xl shadow-black/40">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-100">
-          {formatCalendarTitle(selectedDate)}
-        </p>
-        <button
-          className="rounded-xl bg-[#202020] px-3 py-1 text-xs font-semibold text-slate-300"
-          onClick={() => onSelect(new Date().toISOString().slice(0, 10))}
-          type="button"
-        >
-          Today
-        </button>
-      </div>
-      <div className="mb-2 grid grid-cols-7 text-center text-[11px] font-semibold text-slate-400">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-          <span key={`${day}-${index}`}>{day}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {getCalendarDays(selectedDate).map((day) =>
-          day.value ? (
-            <button
-              className={`grid aspect-square place-items-center rounded-xl text-sm font-semibold ${
-                day.value === selectedDate
-                  ? 'bg-[#6A4DF5] text-white'
-                  : 'bg-[#202020] text-slate-300'
-              }`}
-              key={day.key}
-              onClick={() => onSelect(day.value)}
-              type="button"
-            >
-              {day.label}
-            </button>
-          ) : (
-            <span key={day.key} />
-          ),
-        )}
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-[2rem] border border-white/10 bg-[#2f2e38] p-5 text-slate-100 shadow-2xl shadow-black/50">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#a99cff]">
+              Select date
+            </p>
+            <p className="mt-1 text-xl font-semibold">
+              {formatCalendarTitle(selectedDate)}
+            </p>
+          </div>
+          <button
+            className="grid size-10 place-items-center rounded-full bg-[#202020] text-slate-300"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="mb-3 grid grid-cols-7 text-center text-xs font-semibold text-slate-400">
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+            <span key={`${day}-${index}`}>{day}</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {getCalendarDays(selectedDate).map((day) =>
+            day.value ? (
+              <button
+                className={`grid aspect-square place-items-center rounded-2xl text-base font-semibold transition ${
+                  day.value === selectedDate
+                    ? 'bg-[#6A4DF5] text-white shadow-lg shadow-[#6A4DF5]/25'
+                    : 'bg-[#202020] text-slate-300 hover:bg-white/10'
+                }`}
+                key={day.key}
+                onClick={() => onSelect(day.value)}
+                type="button"
+              >
+                {day.label}
+              </button>
+            ) : (
+              <span key={day.key} />
+            ),
+          )}
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            className="rounded-2xl bg-[#202020] px-4 py-3 text-sm font-semibold text-slate-300"
+            onClick={() => onSelect(new Date().toISOString().slice(0, 10))}
+            type="button"
+          >
+            Today
+          </button>
+          <button
+            className="rounded-2xl bg-[#6A4DF5] px-4 py-3 text-sm font-semibold text-white"
+            onClick={onClose}
+            type="button"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
 function getWeekOfMonth(date) {
-  return Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay()) / 7)
+  return Math.min(Math.ceil(date.getDate() / 7), 4)
 }
 
 function getExpenseMonthKey(dateString) {
   return dateString.slice(0, 7)
+}
+
+function calculateSafeSpend(accounts, budgets) {
+  if (!accounts.length || !budgets.length) return 0
+
+  const available = accounts
+    .filter((account) => account.balance > 0)
+    .reduce((sum, account) => sum + account.balance, 0)
+  const remainingBudget = budgets.reduce(
+    (sum, budget) => sum + Math.max(budget.limit - budget.spent, 0),
+    0,
+  )
+  const today = new Date()
+  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  const daysLeft = Math.max(lastDayOfMonth.getDate() - today.getDate() + 1, 1)
+  const flexibleMoney = Math.max(available - remainingBudget, 0)
+
+  return Math.floor(flexibleMoney / daysLeft)
 }
 
 function formatExpenseMonth(monthKey) {
@@ -1423,6 +1830,25 @@ function formatExpenseMonth(monthKey) {
     month: 'long',
     year: 'numeric',
   })
+}
+
+function formatWeekRange(monthKey, week) {
+  const [year, month] = monthKey.split('-').map(Number)
+  const lastDay = new Date(year, month, 0).getDate()
+  const startDay = (week - 1) * 7 + 1
+  const endDay = week === 4 ? lastDay : Math.min(week * 7, lastDay)
+  const startDate = new Date(year, month - 1, startDay)
+  const endDate = new Date(year, month - 1, endDay)
+  const startLabel = startDate.toLocaleDateString('en-MY', {
+    day: '2-digit',
+    month: 'short',
+  })
+  const endLabel = endDate.toLocaleDateString('en-MY', {
+    day: '2-digit',
+    month: 'short',
+  })
+
+  return `Week ${week} · ${startLabel} - ${endLabel}`
 }
 
 function getExpenseMonths(expenses) {
@@ -1473,6 +1899,39 @@ function groupExpenses(expenses, selectedWeek, selectedMonth) {
   return months
 }
 
+function mapWalletRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    balance: Number(row.balance),
+    tone: row.tone,
+  }
+}
+
+function mapBudgetRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    spent: Number(row.spent),
+    limit: Number(row.limit_amount),
+    color: row.color,
+  }
+}
+
+function mapExpenseRow(row) {
+  return {
+    id: row.id,
+    walletId: row.wallet_id,
+    budgetId: row.budget_id,
+    amount: Number(row.amount),
+    accountName: row.account_name,
+    budgetName: row.budget_name,
+    date: row.date,
+    note: row.note,
+  }
+}
+
 function AuthScreen({
   authError,
   authForm,
@@ -1493,20 +1952,20 @@ function AuthScreen({
   }
 
   return (
-    <main className="mx-auto flex h-screen max-w-md flex-col overflow-hidden bg-[#202020] shadow-2xl shadow-black/40">
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[#202020] shadow-2xl shadow-black/40">
       <section className="grid min-h-0 flex-1 place-items-center overflow-hidden bg-[#202020] px-7">
         <div className="w-full max-w-sm text-slate-100">
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-[#6A4DF5] text-white">
-              <BadiNavIcon size={26} />
+              <PennyMonNavIcon size={26} />
             </div>
             <h1 className="text-3xl font-semibold text-white">
               {isSignup ? 'Create your account' : 'Welcome back'}
             </h1>
             <p className="mt-2 text-sm text-slate-400">
               {isSignup
-                ? 'Start tracking your money with MoneyBadi.'
-                : 'Login to continue to MoneyBadi.'}
+                ? 'Start tracking your money with PennyMon.'
+                : 'Login to continue to PennyMon.'}
             </p>
           </div>
 
@@ -1635,13 +2094,13 @@ function AuthField({
   )
 }
 
-function Badi({ equipped, large = false }) {
+function PennyMonPet({ equipped, large = false }) {
   return (
     <div
       className={`relative mx-auto grid place-items-center ${
         large ? 'size-44' : 'size-32'
       }`}
-      aria-label="MoneyBadi character"
+      aria-label="PennyMon character"
     >
       <div className="absolute inset-0 rounded-full bg-gradient-to-b from-[#f1edff] to-[#dcd5ff]" />
       <div className="relative h-[72%] w-[66%] rounded-[42%] bg-[#f8cda7] shadow-md">
@@ -1651,9 +2110,7 @@ function Badi({ equipped, large = false }) {
         <div className="absolute left-[27%] top-[36%] size-3 rounded-full bg-slate-950" />
         <div className="absolute right-[27%] top-[36%] size-3 rounded-full bg-slate-950" />
         <div className="absolute left-1/2 top-[55%] h-3 w-8 -translate-x-1/2 rounded-b-full border-b-4 border-slate-950" />
-        <div className="absolute bottom-0 left-1/2 h-10 w-20 -translate-x-1/2 rounded-t-3xl bg-[#6A4DF5]">
-          <span className="sr-only">{equipped.outfit}</span>
-        </div>
+        <div className="absolute bottom-0 left-1/2 h-10 w-20 -translate-x-1/2 rounded-t-3xl bg-[#6A4DF5]" />
       </div>
     </div>
   )
@@ -1667,7 +2124,7 @@ function CoinsIcon() {
   )
 }
 
-function ClosetDockButton({ icon: Icon, label, tone }) {
+function PennyMonDockButton({ icon: Icon, label, tone }) {
   const tones = {
     gold: 'from-amber-200 to-orange-300 text-amber-950 shadow-orange-950/25',
     sky: 'from-sky-200 to-cyan-300 text-sky-950 shadow-sky-950/25',
@@ -1748,6 +2205,15 @@ function Stat({ label, value, isDark }) {
         {label}
       </p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
+    </div>
+  )
+}
+
+function SetupHint({ message }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-white/10 bg-[#2b2b32] p-5 text-center text-slate-300">
+      <p className="text-sm font-semibold text-slate-100">Setup required</p>
+      <p className="mt-1 text-sm text-slate-500">{message}</p>
     </div>
   )
 }

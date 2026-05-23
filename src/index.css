@@ -3,7 +3,9 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: #eceef3;
   color: #171725;
   font-family:
@@ -11,6 +13,14 @@ body {
     sans-serif;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 #root {
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
