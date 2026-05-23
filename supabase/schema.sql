@@ -37,7 +37,7 @@ create table if not exists public.pennymon_profiles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references auth.users(id) on delete cascade,
   coins integer not null default 0,
-  mood text not null default 'Calm',
+  mood text not null default 'Happy',
   accessory text not null default 'Round glasses',
   room text not null default 'Cozy desk',
   created_at timestamptz not null default now(),

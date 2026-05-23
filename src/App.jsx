@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   BadgeCheck,
   Edit3,
   Lock,
@@ -19,7 +20,34 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import angryPennyMon from './assets/pennymon/angry.png'
+import calmPennyMon from './assets/pennymon/calm.png'
+import excitedPennyMon from './assets/pennymon/excited.png'
+import happyPennyMon from './assets/pennymon/happy.png'
+import sadPennyMon from './assets/pennymon/sad.png'
+import spaceRoom from './assets/pennymon/rooms/space.png'
+import worriedPennyMon from './assets/pennymon/worried.png'
 import { supabase } from './lib/supabase'
+
+const pennyMonImages = {
+  Angry: angryPennyMon,
+  Calm: calmPennyMon,
+  Excited: excitedPennyMon,
+  Happy: happyPennyMon,
+  Sad: sadPennyMon,
+  Worried: worriedPennyMon,
+}
+
+const roomOptions = [
+  {
+    id: 'Space room',
+    name: 'Space room',
+    price: 200,
+    owned: true,
+    image: spaceRoom,
+    preview: 'from-[#120f2d] via-[#35206f] to-[#8067ff]',
+  },
+]
 
 function App() {
   const loadedUserRef = useRef('')
@@ -49,6 +77,7 @@ function App() {
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState('2026-05')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [isSpendCardFlipped, setIsSpendCardFlipped] = useState(false)
+  const [isRoomPickerOpen, setIsRoomPickerOpen] = useState(false)
   const [swipedExpenseId, setSwipedExpenseId] = useState(null)
   const [touchStartX, setTouchStartX] = useState(null)
   const [draggedExpense, setDraggedExpense] = useState({
@@ -68,12 +97,12 @@ function App() {
     amount: '',
     accountId: '',
     budgetId: '',
-    date: new Date().toISOString().slice(0, 10),
+    date: getLocalDateKey(new Date()),
     note: '',
   })
   const [equipped, setEquipped] = useState({
     accessory: 'Round glasses',
-    room: 'Cozy desk',
+    room: 'Space room',
   })
 
   const [accounts, setAccounts] = useState([])
@@ -98,9 +127,9 @@ function App() {
     trueBalance: available - debt,
     safeSpend: calculateSafeSpend(accounts, budgets),
   }
-  const pennyMonMood = totals.safeSpend >= 40 ? 'Calm' : 'Careful'
   const historyMonths = getExpenseMonths(expenses)
   const todayStats = getTodayStats(expenses, totals.safeSpend)
+  const pennyMonMood = getPennyMonMood(totals, budgets, todayStats)
   const groupedExpenseHistory = groupExpenses(
     expenses,
     historyWeek,
@@ -112,6 +141,8 @@ function App() {
     historyWeek,
   )
   const hasCompletedSetup = accounts.length > 0 && budgets.length > 0
+  const equippedRoom =
+    roomOptions.find((room) => room.id === equipped.room) || roomOptions[0]
 
   useEffect(() => {
     const setUserFromSession = (session) => {
@@ -291,6 +322,28 @@ function App() {
     if (error) setDataError(error.message)
   }
 
+  const equipRoom = async (room) => {
+    setEquipped((current) => ({ ...current, room: room.id }))
+    setIsRoomPickerOpen(false)
+
+    if (!currentUser.id) return
+
+    const { error } = await supabase
+      .from('pennymon_profiles')
+      .upsert(
+        {
+          user_id: currentUser.id,
+          coins,
+          mood: pennyMonMood,
+          accessory: equipped.accessory,
+          room: room.id,
+        },
+        { onConflict: 'user_id' },
+      )
+
+    if (error) setDataError(error.message)
+  }
+
   const closeForm = () => {
     setActiveForm(null)
     setEditingId(null)
@@ -300,7 +353,7 @@ function App() {
       amount: '',
       accountId: '',
       budgetId: '',
-      date: new Date().toISOString().slice(0, 10),
+      date: getLocalDateKey(new Date()),
       note: '',
     })
     setIsCalendarOpen(false)
@@ -514,7 +567,7 @@ function App() {
           account_name: account.name,
           budget_name: budget.name,
           amount,
-          date: expenseForm.date || new Date().toISOString().slice(0, 10),
+          date: expenseForm.date || getLocalDateKey(new Date()),
           note: expenseForm.note.trim() || 'Expense',
         })
         .select()
@@ -548,7 +601,7 @@ function App() {
       amount: '',
       accountId: accounts[0]?.id ? String(accounts[0].id) : '',
       budgetId: budgets[0]?.id ? String(budgets[0].id) : '',
-      date: new Date().toISOString().slice(0, 10),
+      date: getLocalDateKey(new Date()),
       note: '',
     })
     setIsCalendarOpen(false)
@@ -667,7 +720,7 @@ function App() {
 
   return (
     <main
-      className={`mx-auto flex h-dvh max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow}`}
+      className={`relative mx-auto flex h-dvh max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow}`}
     >
       {activeTab !== 'pennymon' && (
         <header className="flex items-center justify-between px-5 pb-3 pt-5">
@@ -720,7 +773,7 @@ function App() {
         {activeTab === 'home' && (
           <div className="space-y-4 pt-3">
             <div
-              className="block h-[286px] w-full text-left [perspective:1200px]"
+              className="block h-[315px] w-full text-left [perspective:1200px]"
               onClick={() => setIsSpendCardFlipped((current) => !current)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -738,37 +791,39 @@ function App() {
                     : 'rotateY(0deg)',
                 }}
               >
-                <div className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#6A4DF5] p-5 text-white shadow-xl shadow-[#6A4DF5]/20 [backface-visibility:hidden]">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-white/75">Today</p>
-                      <h2 className="mt-1 text-3xl font-semibold text-white">
-                        RM{totals.safeSpend}
-                      </h2>
-                      <p className="mt-1 text-sm text-white/75">
-                        safe to spend
-                      </p>
-                    </div>
-                    <PennyMonPet equipped={equipped} />
-                  </div>
-                  <div className="mt-4 rounded-2xl bg-white/15 p-3 ring-1 ring-white/20 backdrop-blur">
-                    <p className="text-sm font-medium text-white">
-                      PennyMon feels calm.
+                <div className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#6A4DF5] bg-[radial-gradient(circle_at_24%_0%,rgba(255,255,255,.28),transparent_34%),linear-gradient(135deg,#8d63ff_0%,#6A4DF5_48%,#4f35df_100%)] p-5 text-white shadow-xl shadow-[#6A4DF5]/20 [backface-visibility:hidden]">
+                  <div className="absolute left-5 top-6 flex h-[138px] w-[48%] flex-col justify-center rounded-[1.6rem] bg-white/18 px-5 py-4 text-white ring-1 ring-white/25 backdrop-blur-md">
+                    <p className="text-base font-bold leading-snug">
+                      PennyMon feels {pennyMonMood.toLowerCase()}.
                     </p>
-                    <p className="mt-1 text-sm text-white/75">
-                      Food spending is moving fast. Review it today to keep your
-                      buddy energized.
+                    <p className="mt-4 text-base font-medium leading-snug text-white/70">
+                      Tiny habits build big savings.
                     </p>
                   </div>
-                  <p className="mt-2 text-center text-xs font-semibold text-white/70">
-                    See insight
-                  </p>
+                  <div className="absolute -right-4 -top-1">
+                    <PennyMonPet mood={pennyMonMood} size="home" />
+                  </div>
+                  <div className="absolute bottom-7 left-5 max-w-[72%] text-left">
+                    <p className="text-sm font-medium text-white/75">
+                      {formatHomeDate(todayStats.date)}
+                    </p>
+                    <h2 className="mt-2 text-[clamp(2.15rem,11vw,3.25rem)] font-semibold leading-none tracking-normal text-white">
+                      RM{formatMoneyAmount(todayStats.spent)}
+                    </h2>
+                    <p className="mt-2 text-base font-medium text-white/70">
+                      spent today
+                    </p>
+                  </div>
+                  <div className="absolute bottom-4 right-6 flex items-center gap-2 text-sm font-semibold text-white">
+                    <span>See insight</span>
+                    <ArrowRight size={20} strokeWidth={2.4} />
+                  </div>
                 </div>
                 <div className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#6A4DF5] p-5 text-white shadow-xl shadow-[#6A4DF5]/20 [backface-visibility:hidden] [transform:rotateY(180deg)]">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-white/75">
-                        Today insight
+                        Today's insight
                       </p>
                     </div>
                     <span className="shrink-0 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white">
@@ -1158,23 +1213,29 @@ function App() {
                           </button>
                           <div
                             className={`relative flex touch-pan-y items-center justify-between rounded-2xl border p-3 will-change-transform ${theme.card}`}
-                            onTouchEnd={(event) => {
+                            onPointerCancel={() => {
+                              setDraggedExpense({ id: null, offset: 0 })
+                              setTouchStartX(null)
+                            }}
+                            onPointerDown={(event) => {
+                              if (!event.isPrimary) return
+                              event.currentTarget.setPointerCapture(event.pointerId)
+                              setTouchStartX(event.clientX)
+                              setSwipedExpenseId(null)
+                            }}
+                            onPointerMove={(event) => {
                               if (touchStartX === null) return
-                              const deltaX = event.changedTouches[0].clientX - touchStartX
+                              const deltaX = event.clientX - touchStartX
+                              const offset = Math.max(Math.min(deltaX, 0), -86)
+                              setDraggedExpense({ id: expense.id, offset })
+                            }}
+                            onPointerUp={(event) => {
+                              if (touchStartX === null) return
+                              const deltaX = event.clientX - touchStartX
                               setSwipedExpenseId(deltaX < -42 ? expense.id : null)
                               setDraggedExpense({ id: null, offset: 0 })
                               if (deltaX > 42) setSwipedExpenseId(null)
                               setTouchStartX(null)
-                            }}
-                            onTouchMove={(event) => {
-                              if (touchStartX === null) return
-                              const deltaX = event.touches[0].clientX - touchStartX
-                              const offset = Math.max(Math.min(deltaX, 0), -86)
-                              setDraggedExpense({ id: expense.id, offset })
-                            }}
-                            onTouchStart={(event) => {
-                              setTouchStartX(event.touches[0].clientX)
-                              setSwipedExpenseId(null)
                             }}
                             style={{
                               transform:
@@ -1212,8 +1273,19 @@ function App() {
 
         {activeTab === 'pennymon' && (
           <section className="relative h-full overflow-hidden">
-            <div className="absolute inset-0 overflow-hidden bg-[#241c46] shadow-xl shadow-slate-300/60">
-              <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(135deg,rgba(255,255,255,.22)_12%,transparent_12%,transparent_50%,rgba(255,255,255,.22)_50%,rgba(255,255,255,.22)_62%,transparent_62%,transparent)] [background-size:28px_28px]" />
+            <div
+              className={`absolute inset-0 overflow-hidden ${equippedRoom.background || 'bg-[#241c46]'} shadow-xl shadow-slate-300/60`}
+            >
+              {equippedRoom.image ? (
+                <img
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                  src={equippedRoom.image}
+                />
+              ) : (
+                <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(135deg,rgba(255,255,255,.22)_12%,transparent_12%,transparent_50%,rgba(255,255,255,.22)_50%,rgba(255,255,255,.22)_62%,transparent_62%,transparent)] [background-size:28px_28px]" />
+              )}
+              <div className="absolute inset-0 bg-black/10" />
               <div className="absolute left-4 right-4 top-4 z-10 flex items-center justify-between">
                 <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#2f2e38] px-3 py-2 text-sm font-bold text-slate-100 shadow-md">
                   <CoinsIcon />
@@ -1223,12 +1295,12 @@ function App() {
                   Mood: {pennyMonMood}
                 </div>
               </div>
-              <div className="relative px-5 pt-20 text-center">
+              <div className="relative flex h-full flex-col items-center justify-start px-5 pb-28 pt-[4.8rem] text-center">
                 <h2 className="text-lg font-black tracking-wide text-white [text-shadow:0_2px_0_rgba(0,0,0,.35)]">
                   PennyMon
                 </h2>
-                <div className="mt-14">
-                  <PennyMonPet equipped={equipped} large />
+                <div className="mt-3">
+                  <PennyMonPet mood={pennyMonMood} large />
                 </div>
                 <div className="hidden">
                   <p className="text-sm font-semibold text-slate-950">
@@ -1240,11 +1312,24 @@ function App() {
                 </div>
               </div>
 
-              <div className="absolute bottom-5 left-0 right-0 z-10 grid grid-cols-3 px-8">
+              <div className="absolute bottom-3 left-0 right-0 z-10 grid grid-cols-3 px-8">
                 <PennyMonDockButton icon={Glasses} label="Accessories" tone="violet" />
-                <PennyMonDockButton icon={Home} label="Room" tone="sky" />
+                <PennyMonDockButton
+                  icon={Home}
+                  label="Room"
+                  onClick={() => setIsRoomPickerOpen(true)}
+                  tone="sky"
+                />
                 <PennyMonDockButton icon={Palette} label="Colour" tone="gold" />
               </div>
+              {isRoomPickerOpen && (
+                <RoomPickerModal
+                  currentRoom={equipped.room}
+                  onClose={() => setIsRoomPickerOpen(false)}
+                  onEquip={equipRoom}
+                  rooms={roomOptions}
+                />
+              )}
             </div>
           </section>
         )}
@@ -1272,6 +1357,9 @@ function App() {
               key={tab.id}
               onClick={() => {
                 if (isLocked) return
+                setActiveForm(null)
+                setIsCalendarOpen(false)
+                setIsRoomPickerOpen(false)
                 setActiveTab(tab.id)
               }}
             >
@@ -1399,19 +1487,13 @@ function App() {
 
 function PennyMonNavIcon({ size = 19 }) {
   return (
-    <span
-      className="relative inline-grid place-items-center"
+    <img
+      alt=""
+      className="object-contain"
+      src={happyPennyMon}
       style={{ width: size, height: size }}
       aria-hidden="true"
-    >
-      <span className="absolute inset-0 rounded-full bg-[#dcd5ff]" />
-      <span className="absolute bottom-[1px] h-[82%] w-[72%] rounded-[42%] bg-[#f8cda7]">
-        <span className="absolute left-[25%] top-[38%] size-[3px] rounded-full bg-slate-950" />
-        <span className="absolute right-[25%] top-[38%] size-[3px] rounded-full bg-slate-950" />
-        <span className="absolute left-1/2 top-[58%] h-[3px] w-[8px] -translate-x-1/2 rounded-b-full border-b-2 border-slate-950" />
-        <span className="absolute bottom-0 left-1/2 h-[5px] w-[13px] -translate-x-1/2 rounded-t-full bg-[#6A4DF5]" />
-      </span>
-    </span>
+    />
   )
 }
 
@@ -1444,12 +1526,8 @@ function getSpendingGraphData(expenses, selectedMonth, selectedWeek = null) {
 }
 
 function getTodayStats(expenses, safeSpend) {
-  const today = new Date().toISOString().slice(0, 10)
-  const latestExpenseDate = [...expenses]
-    .sort((a, b) => b.date.localeCompare(a.date))[0]?.date
-  const hasTodayExpenses = expenses.some((expense) => expense.date === today)
-  const targetDate = hasTodayExpenses ? today : latestExpenseDate || today
-  const dayExpenses = expenses.filter((expense) => expense.date === targetDate)
+  const today = getLocalDateKey(new Date())
+  const dayExpenses = expenses.filter((expense) => expense.date === today)
   const spent = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0)
   const remaining = Math.max(safeSpend - spent, 0)
   const progress = Math.min((spent / Math.max(safeSpend, 1)) * 100, 100)
@@ -1477,7 +1555,7 @@ function getTodayStats(expenses, safeSpend) {
 
   return {
     count: dayExpenses.length,
-    date: targetDate,
+    date: today,
     progress,
     remaining,
     safeSpend,
@@ -1489,62 +1567,52 @@ function getTodayStats(expenses, safeSpend) {
 }
 
 function TodayInsight({ stats }) {
-  const radius = 42
-  const circumference = 2 * Math.PI * radius
-  const strokeOffset = circumference - (stats.progress / 100) * circumference
+  const rows = stats.topCategories.length
+    ? stats.topCategories
+    : [
+        { name: 'No spending yet', amount: 0 },
+        { name: 'Add expense', amount: 0 },
+        { name: 'Track habits', amount: 0 },
+      ]
+  const maxAmount = Math.max(...rows.map((row) => row.amount), 1)
+  const highest = rows[0]
 
   return (
-    <div className="mt-4 rounded-3xl bg-white/10 p-4 ring-1 ring-white/15">
-      <div className="flex items-center gap-4">
-        <div className="relative grid size-28 shrink-0 place-items-center">
-          <svg className="size-28 -rotate-90" viewBox="0 0 112 112">
-            <circle
-              cx="56"
-              cy="56"
-              fill="none"
-              r={radius}
-              stroke="rgba(255,255,255,.18)"
-              strokeWidth="12"
-            />
-            <circle
-              cx="56"
-              cy="56"
-              fill="none"
-              r={radius}
-              stroke="white"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeOffset}
-              strokeLinecap="round"
-              strokeWidth="12"
-            />
-          </svg>
-          <div className="absolute inset-0 grid place-items-center text-center">
-            <div>
-              <p className="text-xl font-bold leading-none">RM{stats.spent}</p>
-              <p className="mt-1 text-[11px] font-semibold text-white/65">
-                spent
+    <div className="mt-4 rounded-3xl bg-[#202020]/25 p-4 ring-1 ring-white/15">
+      <p className="text-base font-bold text-white">
+        {stats.spent
+          ? `You spent most on ${highest.name}`
+          : 'No spending yet'}
+      </p>
+      <div className="mt-5 space-y-3">
+        {rows.slice(0, 4).map((row) => {
+          const width = row.amount ? Math.max((row.amount / maxAmount) * 100, 8) : 8
+
+          return (
+            <div
+              className="grid grid-cols-[5rem_1fr_4rem] items-center gap-2"
+              key={row.name}
+            >
+              <p className="truncate text-sm font-semibold text-white/90">
+                {row.name}
+              </p>
+              <div className="h-6 overflow-hidden rounded-sm bg-white/15">
+                <div
+                  className="h-full bg-white"
+                  style={{ width: `${width}%` }}
+                />
+              </div>
+              <p className="text-right text-sm font-semibold text-white">
+                RM{row.amount}
               </p>
             </div>
-          </div>
-        </div>
-        <div className="min-w-0 flex-1 space-y-2">
-          {[0, 1, 2].map((index) => {
-            const category = stats.topCategories[index]
-
-            return (
-              <CategoryPill
-                key={category?.name || `empty-${index}`}
-                value={
-                  category
-                    ? `${category.name} · RM${category.amount}`
-                    : 'No expense'
-                }
-              />
-            )
-          })}
-        </div>
+          )
+        })}
       </div>
-      <SourceBar sources={stats.sources} />
+      <div className="mt-5 flex items-center justify-between text-xs font-semibold text-white/60">
+        <span>{stats.count} transactions</span>
+        <span>{formatExpenseDate(stats.date)}</span>
+      </div>
     </div>
   )
 }
@@ -1571,6 +1639,7 @@ function EmptyGraphState() {
     </div>
   )
 }
+
 
 function SourceBar({ sources }) {
   const colors = [
@@ -1701,6 +1770,24 @@ function formatExpenseDate(dateString) {
   })
 }
 
+function formatMoneyAmount(amount) {
+  const value = Number(amount)
+
+  return value.toLocaleString('en-MY', {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function formatHomeDate(dateString) {
+  const date = new Date(`${dateString}T00:00:00`)
+  return date.toLocaleDateString('en-MY', {
+    day: 'numeric',
+    month: 'short',
+    weekday: 'short',
+  })
+}
+
 function formatCalendarTitle(dateString) {
   const date = new Date(`${dateString}T00:00:00`)
   return date.toLocaleDateString('en-MY', {
@@ -1733,8 +1820,8 @@ function getCalendarDays(dateString) {
 
 function CalendarPopover({ onClose, onSelect, selectedDate }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-5 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-[2rem] border border-white/10 bg-[#2f2e38] p-5 text-slate-100 shadow-2xl shadow-black/50">
+    <div className="absolute inset-0 z-50 grid place-items-center bg-black/60 px-5 backdrop-blur-sm">
+      <div className="max-h-[88dvh] w-full max-w-sm overflow-y-auto rounded-[2rem] border border-white/10 bg-[#2f2e38] p-5 text-slate-100 shadow-2xl shadow-black/50">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[#a99cff]">
@@ -1780,7 +1867,7 @@ function CalendarPopover({ onClose, onSelect, selectedDate }) {
         <div className="mt-5 grid grid-cols-2 gap-3">
           <button
             className="rounded-2xl bg-[#202020] px-4 py-3 text-sm font-semibold text-slate-300"
-            onClick={() => onSelect(new Date().toISOString().slice(0, 10))}
+            onClick={() => onSelect(getLocalDateKey(new Date()))}
             type="button"
           >
             Today
@@ -1822,6 +1909,23 @@ function calculateSafeSpend(accounts, budgets) {
   const flexibleMoney = Math.max(available - remainingBudget, 0)
 
   return Math.floor(flexibleMoney / daysLeft)
+}
+
+function getPennyMonMood(totals, budgets, todayStats) {
+  if (!budgets.length) return 'Happy'
+  if (budgets.some((budget) => budget.spent > budget.limit)) return 'Sad'
+  if (budgets.some((budget) => budget.spent / budget.limit >= 0.9)) return 'Worried'
+  if (totals.safeSpend >= 50) return 'Excited'
+  if (todayStats.spent > 0) return 'Calm'
+  return 'Happy'
+}
+
+function getLocalDateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
 }
 
 function formatExpenseMonth(monthKey) {
@@ -2094,24 +2198,26 @@ function AuthField({
   )
 }
 
-function PennyMonPet({ equipped, large = false }) {
+function PennyMonPet({ large = false, mood = 'Happy', size = 'default' }) {
+  const image = pennyMonImages[mood] || happyPennyMon
+  const sizeClass = large
+    ? 'h-[21rem] w-[21rem] max-h-[43dvh] max-w-[88vw]'
+    : size === 'card'
+      ? 'size-36'
+    : size === 'home'
+      ? 'size-48'
+      : 'size-32'
+
   return (
     <div
-      className={`relative mx-auto grid place-items-center ${
-        large ? 'size-44' : 'size-32'
-      }`}
+      className={`relative mx-auto grid place-items-center overflow-hidden ${sizeClass}`}
       aria-label="PennyMon character"
     >
-      <div className="absolute inset-0 rounded-full bg-gradient-to-b from-[#f1edff] to-[#dcd5ff]" />
-      <div className="relative h-[72%] w-[66%] rounded-[42%] bg-[#f8cda7] shadow-md">
-        <div className="absolute left-1/2 top-3 h-5 w-16 -translate-x-1/2 rounded-full bg-[#6A4DF5] text-[0px]">
-          {equipped.accessory}
-        </div>
-        <div className="absolute left-[27%] top-[36%] size-3 rounded-full bg-slate-950" />
-        <div className="absolute right-[27%] top-[36%] size-3 rounded-full bg-slate-950" />
-        <div className="absolute left-1/2 top-[55%] h-3 w-8 -translate-x-1/2 rounded-b-full border-b-4 border-slate-950" />
-        <div className="absolute bottom-0 left-1/2 h-10 w-20 -translate-x-1/2 rounded-t-3xl bg-[#6A4DF5]" />
-      </div>
+      <img
+        alt={`${mood} PennyMon`}
+        className="h-full w-full object-contain drop-shadow-xl"
+        src={image}
+      />
     </div>
   )
 }
@@ -2124,7 +2230,7 @@ function CoinsIcon() {
   )
 }
 
-function PennyMonDockButton({ icon: Icon, label, tone }) {
+function PennyMonDockButton({ icon: Icon, label, onClick, tone }) {
   const tones = {
     gold: 'from-amber-200 to-orange-300 text-amber-950 shadow-orange-950/25',
     sky: 'from-sky-200 to-cyan-300 text-sky-950 shadow-sky-950/25',
@@ -2134,6 +2240,7 @@ function PennyMonDockButton({ icon: Icon, label, tone }) {
   return (
     <button
       className="group flex flex-col items-center gap-1 justify-self-center text-xs font-black text-white [text-shadow:0_2px_0_rgba(0,0,0,.35)]"
+      onClick={onClick}
       type="button"
     >
       <div
@@ -2147,6 +2254,78 @@ function PennyMonDockButton({ icon: Icon, label, tone }) {
         {label}
       </span>
     </button>
+  )
+}
+
+function RoomPickerModal({ currentRoom, onClose, onEquip, rooms }) {
+  return (
+    <div className="absolute inset-0 z-30 grid place-items-center bg-black/45 px-5 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-[2rem] border border-white/10 bg-[#202020] p-4 shadow-2xl shadow-black/40">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9b8cff]">
+              Room
+            </p>
+            <h3 className="text-xl font-bold text-white">Choose background</h3>
+          </div>
+          <button
+            className="grid size-10 place-items-center rounded-2xl bg-white/10 text-slate-200"
+            onClick={onClose}
+            type="button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="grid gap-3">
+          {rooms.map((room) => {
+            const isEquipped = currentRoom === room.id
+
+            return (
+              <button
+                className={`flex items-center gap-3 rounded-3xl border p-3 text-left transition ${
+                  isEquipped
+                    ? 'border-[#6A4DF5] bg-[#6A4DF5]/15'
+                    : 'border-white/10 bg-white/[0.04] active:bg-white/10'
+                }`}
+                key={room.id}
+                onClick={() => onEquip(room)}
+                type="button"
+              >
+                <div
+                  className={`h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br ${room.preview} shadow-lg`}
+                >
+                  {room.image ? (
+                    <img
+                      alt=""
+                      className="h-full w-full object-cover"
+                      src={room.image}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-[radial-gradient(circle_at_50%_25%,rgba(255,255,255,.28),transparent_32%)]" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-white">{room.name}</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    {room.owned ? 'Owned for testing' : `${room.price} coins`}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    isEquipped
+                      ? 'bg-[#6A4DF5] text-white'
+                      : 'bg-white/10 text-slate-300'
+                  }`}
+                >
+                  {isEquipped ? 'Equipped' : 'Equip'}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -2220,8 +2399,8 @@ function SetupHint({ message }) {
 
 function FormSheet({ children, title, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-black/50">
-      <section className="w-full max-w-md rounded-t-[2rem] border border-white/10 bg-[#2f2e38] p-5 text-slate-100 shadow-2xl">
+    <div className="absolute inset-0 z-50 grid place-items-end bg-black/50">
+      <section className="max-h-[88dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-[#2f2e38] p-5 text-slate-100 shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-xl font-semibold">{title}</h2>
           <button
@@ -2274,3 +2453,4 @@ function ActionHeader({ icon: Icon, title, subtitle, isDark, onAction }) {
 }
 
 export default App
+
