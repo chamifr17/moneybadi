@@ -177,15 +177,7 @@ PennyMon sends the selected question and a finance summary to the Edge Function.
 
 ## Screenshots
 
-Add screenshots here before submission:
 
-```txt
-docs/screenshots/home.png
-docs/screenshots/add-expense.png
-docs/screenshots/expense-history.png
-docs/screenshots/pennymon-room.png
-docs/screenshots/pennymon-ai.png
-```
 
 ## Demo Account
 
