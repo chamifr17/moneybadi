@@ -18,6 +18,8 @@ html {
   overflow-x: hidden;
   overscroll-behavior: none;
   background: #202020;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 #root {

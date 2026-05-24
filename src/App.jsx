@@ -11,7 +11,6 @@ import {
   Moon,
   Palette,
   Plus,
-  Send,
   Sun,
   Target,
   Trash2,
@@ -3572,7 +3571,7 @@ function AuthField({
       <div className="flex items-center gap-3 rounded-xl border border-[#3a3a3a] bg-transparent px-4 py-3 text-slate-100 transition focus-within:border-[#6A4DF5]">
         <Icon className="shrink-0 text-slate-500" size={18} />
         <input
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-600"
+          className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-slate-600"
           onChange={onChange}
           placeholder={placeholder}
           type={type}

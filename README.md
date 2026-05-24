@@ -177,15 +177,45 @@ PennyMon sends the selected question and a finance summary to the Edge Function.
 
 ## Screenshots
 
-Add screenshots here before submission:
+<p>
+  <img src="docs/screenshots/screenshot-01.png" alt="PennyMon app screenshot 1" width="220" />
+  <img src="docs/screenshots/screenshot-02.png" alt="PennyMon app screenshot 2" width="220" />
+  <img src="docs/screenshots/screenshot-03.png" alt="PennyMon app screenshot 3" width="220" />
+</p>
 
-```txt
-docs/screenshots/home.png
-docs/screenshots/add-expense.png
-docs/screenshots/expense-history.png
-docs/screenshots/pennymon-room.png
-docs/screenshots/pennymon-ai.png
-```
+<p>
+  <img src="docs/screenshots/screenshot-04.png" alt="PennyMon app screenshot 4" width="220" />
+  <img src="docs/screenshots/screenshot-05.png" alt="PennyMon app screenshot 5" width="220" />
+  <img src="docs/screenshots/screenshot-06.png" alt="PennyMon app screenshot 6" width="220" />
+</p>
+
+<p>
+  <img src="docs/screenshots/screenshot-07.png" alt="PennyMon app screenshot 7" width="220" />
+  <img src="docs/screenshots/screenshot-08.png" alt="PennyMon app screenshot 8" width="220" />
+  <img src="docs/screenshots/screenshot-09.png" alt="PennyMon app screenshot 9" width="220" />
+</p>
+
+<p>
+  <img src="docs/screenshots/screenshot-10.png" alt="PennyMon app screenshot 10" width="220" />
+  <img src="docs/screenshots/screenshot-11.png" alt="PennyMon app screenshot 11" width="220" />
+  <img src="docs/screenshots/screenshot-12.png" alt="PennyMon app screenshot 12" width="220" />
+</p>
+
+<p>
+  <img src="docs/screenshots/screenshot-13.png" alt="PennyMon app screenshot 13" width="220" />
+  <img src="docs/screenshots/screenshot-14.png" alt="PennyMon app screenshot 14" width="220" />
+  <img src="docs/screenshots/screenshot-15.png" alt="PennyMon app screenshot 15" width="220" />
+</p>
+
+<p>
+  <img src="docs/screenshots/screenshot-16.png" alt="PennyMon app screenshot 16" width="220" />
+  <img src="docs/screenshots/screenshot-17.png" alt="PennyMon app screenshot 17" width="220" />
+  <img src="docs/screenshots/screenshot-18.png" alt="PennyMon app screenshot 18" width="220" />
+</p>
+
+<p>
+  <img src="docs/screenshots/screenshot-19.png" alt="PennyMon app screenshot 19" width="220" />
+</p>
 
 ## Demo Account
 
@@ -211,7 +241,7 @@ No public demo account is included by default. For judging, create a temporary S
 ## Team Members and Roles
 
 - Chami: frontend development, Supabase integration, product flow
-- PennyMon artwork/design teammate: PennyMon moods, rooms, colours, accessories
+- Aishah Soffi: PennyMon artwork, moods, rooms, colours, and accessories
 - Additional teammates: update this section with names and responsibilities
 
 ## AI Tools Used
@@ -228,6 +258,7 @@ No public demo account is included by default. For judging, create a temporary S
 - Supabase JavaScript Client
 - Supabase Edge Functions
 - Google Gemini API
+- Original PennyMon artwork by Aishah Soffi
 
 ## License
 
