@@ -8,10 +8,8 @@ import {
   Home,
   Glasses,
   MoreHorizontal,
-  Moon,
   Palette,
   Plus,
-  Sun,
   Target,
   Trash2,
   Trophy,
@@ -293,7 +291,6 @@ function App() {
   const [dataError, setDataError] = useState('')
   const [isDataLoading, setIsDataLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('home')
-  const [isDark, setIsDark] = useState(true)
   const [coins, setCoins] = useState(0)
   const [ownedItems, setOwnedItems] = useState(defaultOwnedItems)
   const [claimedQuestIds, setClaimedQuestIds] = useState([])
@@ -1303,21 +1300,15 @@ function App() {
   ]
 
   const theme = {
-    app: isDark ? 'bg-[#202020]' : 'bg-[#f7f7fb]',
-    page: isDark ? 'bg-[#282828]' : 'bg-[#f7f7fb]',
-    card: isDark
-      ? 'border-white/10 bg-[#2f2e38] text-slate-100'
-      : 'border-slate-200 bg-white text-slate-950',
-    muted: isDark ? 'text-slate-400' : 'text-slate-500',
-    title: isDark ? 'text-slate-100' : 'text-[#171725]',
-    nav: isDark ? 'border-[#35343f] bg-[#24232d]' : 'border-slate-200 bg-white',
-    navIdle: isDark ? 'text-slate-400' : 'text-slate-500',
-    shadow: isDark ? 'shadow-black/40' : 'shadow-slate-300/60',
+    app: 'bg-[#202020]',
+    page: 'bg-[#282828]',
+    card: 'border-white/10 bg-[#2f2e38] text-slate-100',
+    muted: 'text-slate-400',
+    title: 'text-slate-100',
+    nav: 'border-[#35343f] bg-[#24232d]',
+    navIdle: 'text-slate-400',
+    shadow: 'shadow-black/40',
   }
-  const pageScrollClass =
-    activeTab === 'expense'
-      ? `min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-[calc(24px+env(safe-area-inset-bottom))] ${theme.page}`
-      : `min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-[calc(24px+env(safe-area-inset-bottom))] ${theme.page}`
   const isModalOpen =
     Boolean(activeForm) ||
     isCalendarOpen ||
@@ -1327,6 +1318,15 @@ function App() {
     isPennyMonHelpOpen ||
     Boolean(pendingPurchase) ||
     Boolean(successMessage)
+  const isPageScrollLocked =
+    isModalOpen ||
+    isMoodInfoOpen ||
+    isPennyMonPresetsOpen ||
+    Boolean(pennyMonAnswer) ||
+    isPennyMonThinking
+  const pageScrollClass = `min-h-0 flex-1 space-y-4 ${
+    isPageScrollLocked ? 'overflow-y-hidden' : 'overflow-y-auto'
+  } px-5 pb-[calc(24px+env(safe-area-inset-bottom))] ${theme.page}`
   const isPennyMonShopOpen =
     isRoomPickerOpen || isColorPickerOpen || isAccessoryPickerOpen
 
@@ -1354,7 +1354,7 @@ function App() {
       className={`relative mx-auto flex h-dvh max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow}`}
     >
       {activeTab !== 'pennymon' && (
-        <header className="flex items-center justify-between px-5 pb-3 pt-5">
+        <header className="flex items-center justify-between px-5 pb-3.5 pt-6">
           <div>
             <p className="text-sm font-semibold text-[#6A4DF5]">PennyMon</p>
             <h1 className={`text-2xl font-semibold ${theme.title}`}>
@@ -1362,13 +1362,6 @@ function App() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              className={`grid size-11 place-items-center rounded-full border shadow-sm ${theme.card}`}
-              onClick={() => setIsDark((current) => !current)}
-              type="button"
-            >
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
             <button
               className={`grid size-11 place-items-center rounded-full border shadow-sm ${theme.card}`}
               onClick={logout}
@@ -1402,7 +1395,7 @@ function App() {
         }
       >
         {activeTab === 'home' && (
-          <div className="space-y-4 pt-3">
+          <div className="space-y-4 pt-3.5">
             <div
               className="block h-[315px] w-full text-left [perspective:1200px]"
               onClick={() => {
@@ -1510,22 +1503,19 @@ function App() {
               <Stat
                 label="Available"
                 value={`RM${formatMoneyAmount(totals.available)}`}
-                isDark={isDark}
               />
               <Stat
                 label="Debt"
                 value={`RM${formatMoneyAmount(totals.debt)}`}
-                isDark={isDark}
               />
               <Stat
                 label="True"
                 value={`RM${formatMoneyAmount(totals.trueBalance)}`}
-                isDark={isDark}
               />
             </div>
 
-            <section>
-              <div className="mb-3 flex items-center justify-between">
+            <section className="pt-1">
+              <div className="mb-4 flex items-center justify-between">
                 <h2 className={`text-lg font-semibold ${theme.title}`}>
                   Daily quests
                 </h2>
@@ -1583,7 +1573,6 @@ function App() {
               icon={Plus}
               title="Wallets"
               subtitle="Track banks, cash, e-wallets, and pay-later."
-              isDark={isDark}
               onAction={openAddWallet}
             />
             <div className="space-y-3 pb-6">
@@ -1661,7 +1650,6 @@ function App() {
               icon={Plus}
               title="Budgets"
               subtitle="Simple category limits with progress."
-              isDark={isDark}
               onAction={openAddBudget}
             />
             <div className="space-y-3 pb-6">
@@ -1736,7 +1724,6 @@ function App() {
               icon={Plus}
               title="Add Expense / Settle Debt"
               subtitle="Log spending and update your wallet and budget."
-              isDark={isDark}
             />
             <form
               className={`space-y-4 rounded-[2rem] border p-4 shadow-sm ${theme.card}`}
@@ -2071,7 +2058,7 @@ function App() {
               >
                 ?
               </button>
-              <div className="relative flex h-full flex-col items-center justify-start px-5 pb-24 pt-[4.55rem] text-center">
+              <div className="relative flex h-full flex-col items-center justify-start px-5 pb-24 pt-[5.05rem] text-center">
                 <h2 className="text-lg font-black tracking-wide text-white [text-shadow:0_2px_0_rgba(0,0,0,.35)]">
                   PennyMon
                 </h2>
@@ -2106,8 +2093,8 @@ function App() {
                 </div>
               </div>
 
-              {!isPennyMonShopOpen && (
-                <div className="fixed bottom-[calc(136px+env(safe-area-inset-bottom))] left-1/2 z-[110] grid w-full max-w-md -translate-x-1/2 grid-cols-3 px-8">
+              {!isPennyMonShopOpen && !isPennyMonHelpOpen && (
+                <div className="fixed bottom-[calc(112px+env(safe-area-inset-bottom))] left-1/2 z-[110] grid w-full max-w-md -translate-x-1/2 grid-cols-3 px-8">
                   <PennyMonDockButton
                     icon={Glasses}
                     label="Accessories"
@@ -3387,16 +3374,10 @@ function CardActions({ addLabel = 'Add amount', onAddAmount, onDelete, onEdit })
   )
 }
 
-function Stat({ label, value, isDark }) {
+function Stat({ label, value }) {
   return (
-    <div
-      className={`rounded-3xl border p-3 shadow-sm ${
-        isDark
-          ? 'border-white/10 bg-[#2f2e38] text-slate-100'
-          : 'border-slate-200 bg-white text-slate-950'
-      }`}
-    >
-      <p className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+    <div className="rounded-3xl border border-white/10 bg-[#2f2e38] p-3 text-slate-100 shadow-sm">
+      <p className="text-xs font-medium text-slate-400">
         {label}
       </p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
@@ -3444,13 +3425,9 @@ function Field({ children, label }) {
   )
 }
 
-function ActionHeader({ icon: Icon, title, subtitle, isDark, onAction }) {
+function ActionHeader({ icon: Icon, title, subtitle, onAction }) {
   return (
-    <div
-      className={`flex items-center justify-between rounded-[2rem] p-5 text-white shadow-lg ${
-        isDark ? 'bg-[#171717] shadow-black/30' : 'bg-[#24232d] shadow-slate-300/40'
-      }`}
-    >
+    <div className="flex items-center justify-between rounded-[2rem] bg-[#171717] p-5 text-white shadow-lg shadow-black/30">
       <div>
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="mt-1 text-sm text-slate-300">{subtitle}</p>
