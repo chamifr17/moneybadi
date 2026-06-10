@@ -7,7 +7,7 @@ Use this flow for a reliable final-round demo after seeding the demo account wit
 1. Register or create this Supabase Auth user: email `pennymondemo@gmail.com`, password `pennymondemo11`, username `PennyMon Demo`.
 2. Run `supabase/demo_seed.sql` in the Supabase SQL editor.
 3. Log in as the demo user in the app.
-4. If needed, buy one PennyMon item during rehearsal so the shop flow is familiar. The seed gives the user 260 Monny.
+4. If needed, buy one PennyMon item during rehearsal so the shop flow is familiar. The seed gives the user 9999 Monny and unlocks every PennyMon shop item for judging.
 
 ## Suggested Live Flow
 

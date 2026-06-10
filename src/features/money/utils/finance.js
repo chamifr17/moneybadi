@@ -11,6 +11,11 @@ export function isCreditLineAccount(account) {
   return ['Credit', 'Pay later'].includes(account?.type)
 }
 
+export function getCreditLineAvailable(account) {
+  if (!isCreditLineAccount(account)) return Infinity
+  return Math.max(Number(account.balance) || 0, 0)
+}
+
 export function isDebtTargetAccount(account) {
   return isCreditLineAccount(account) || account?.balance < 0
 }

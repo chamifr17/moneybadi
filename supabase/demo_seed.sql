@@ -89,7 +89,7 @@ begin
     (demo_user_id, tng_id, transport_id, 'Touch n Go eWallet', 'Transport', 6.00, current_month_start + 9, 'Train fare');
 
   insert into public.pennymon_profiles (user_id, coins, mood, accessory, room)
-  values (demo_user_id, 260, 'Worried', 'Glasses', 'Default room');
+  values (demo_user_id, 9999, 'Worried', 'Glasses', 'Space room');
 
-  raise notice 'Seeded PennyMon demo data for % (%) with 3 budgets', demo_email, demo_user_id;
+  raise notice 'Seeded PennyMon Demo data for % (%) with 3 budgets', demo_email, demo_user_id;
 end $$;

@@ -1,13 +1,15 @@
 import {
   ArrowRight,
   BadgeCheck,
+  ChevronDown,
   Edit3,
+  Eye,
+  EyeOff,
   Lock,
   LogOut,
   Mail,
   Home,
   Glasses,
-  MoreHorizontal,
   Palette,
   Plus,
   Target,
@@ -56,6 +58,7 @@ import { askPennyMon } from './features/ai/services/pennyMonAiService'
 import {
   calculateDebt,
   calculateSafeSpend,
+  getCreditLineAvailable,
   getExpenseMonths,
   getPennyMonMood,
   getPennyMonMoodReason,
@@ -220,6 +223,15 @@ const accessoryOptions = [
   },
 ]
 
+const preloadPennyMonImages = [
+  ...new Set([
+    ...Object.values(pennyMonImages),
+    ...Object.values(pennyMonColorSets.Blue),
+    ...Object.values(pennyMonColorSets.Orange),
+    ...accessoryOptions.map((accessory) => accessory.image).filter(Boolean),
+  ]),
+]
+
 const roomOptions = [
   {
     id: 'Default room',
@@ -251,6 +263,14 @@ const defaultOwnedItems = {
   colors: ['Default'],
   rooms: ['Default room'],
 }
+
+const demoOwnedItems = {
+  accessories: accessoryOptions.map((accessory) => accessory.id),
+  colors: colorOptions.map((color) => color.id),
+  rooms: roomOptions.map((room) => room.id),
+}
+
+const demoUnlockCoinAmount = 9999
 
 const pennyMonMoodQuotes = {
   Angry: 'Pause first. Your money needs a reset.',
@@ -290,6 +310,8 @@ function App() {
   })
   const [dataError, setDataError] = useState('')
   const [isDataLoading, setIsDataLoading] = useState(false)
+  const [hasLoadedMoneyData, setHasLoadedMoneyData] = useState(false)
+  const [arePennyMonImagesReady, setArePennyMonImagesReady] = useState(false)
   const [activeTab, setActiveTab] = useState('home')
   const [coins, setCoins] = useState(0)
   const [ownedItems, setOwnedItems] = useState(defaultOwnedItems)
@@ -314,11 +336,17 @@ function App() {
   const [pennyMonChatInput, setPennyMonChatInput] = useState('')
   const [pennyMonAnswer, setPennyMonAnswer] = useState('')
   const [isPennyMonThinking, setIsPennyMonThinking] = useState(false)
+  const [savingAction, setSavingAction] = useState('')
   const [pendingPurchase, setPendingPurchase] = useState(null)
   const [successMessage, setSuccessMessage] = useState('')
   const [swipedExpenseId, setSwipedExpenseId] = useState(null)
+  const [swipedMoneyCardId, setSwipedMoneyCardId] = useState(null)
   const [touchStartX, setTouchStartX] = useState(null)
   const [draggedExpense, setDraggedExpense] = useState({
+    id: null,
+    offset: 0,
+  })
+  const [draggedMoneyCard, setDraggedMoneyCard] = useState({
     id: null,
     offset: 0,
   })
@@ -437,15 +465,43 @@ function App() {
   }, [activeTab])
 
   useEffect(() => {
+    let isMounted = true
+
+    Promise.all(
+      preloadPennyMonImages.map(
+        (source) =>
+          new Promise((resolve) => {
+            const image = new Image()
+            image.onload = resolve
+            image.onerror = resolve
+            image.src = source
+
+            if (image.decode) {
+              image.decode().then(resolve).catch(resolve)
+            }
+          }),
+      ),
+    ).then(() => {
+      if (isMounted) setArePennyMonImagesReady(true)
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
     const setUserFromSession = (session) => {
       const user = session?.user
 
       if (!user) {
         setIsAuthenticated(false)
+        setHasLoadedMoneyData(false)
         setCurrentUser({ id: '', name: 'Chami', email: 'chami@pennymon.app' })
         return
       }
 
+      setHasLoadedMoneyData(false)
       setCurrentUser({
         id: user.id,
         name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
@@ -471,6 +527,7 @@ function App() {
 
   const loadMoneyData = useCallback(async (userId) => {
     setIsDataLoading(true)
+    setHasLoadedMoneyData(false)
     setDataError('')
 
     const {
@@ -483,6 +540,7 @@ function App() {
     if (error) {
       setDataError(error.message)
       setIsDataLoading(false)
+      setHasLoadedMoneyData(true)
       return
     }
 
@@ -493,23 +551,33 @@ function App() {
     setExpenses(expenseRows.map(mapExpenseRow))
     setSelectedHistoryMonth(getExpenseMonthKey(getLocalDateKey(new Date())))
     setHistoryWeek(getWeekOfMonth(new Date()))
-    setOwnedItems(loadedOwnedItems)
     setClaimedQuestIds(loadClaimedQuestIds(userId))
     setPiggyBankWalletIds(loadedPiggyBankWalletIds)
     setPiggyBankDepositTodayIds(loadPiggyBankDepositTodayIds(userId))
     setPurchasedTodayIds(loadPurchasedTodayIds(userId))
 
     if (profileRow) {
-      const selectedRoom = isOwnedItem(loadedOwnedItems, 'rooms', profileRow.room)
+      const profileCoins = Number(profileRow.coins)
+      const nextOwnedItems =
+        profileCoins >= demoUnlockCoinAmount ? demoOwnedItems : loadedOwnedItems
+      const selectedRoom = isOwnedItem(nextOwnedItems, 'rooms', profileRow.room)
         ? profileRow.room
         : 'Default room'
-      setCoins(profileRow.coins)
+      setOwnedItems(nextOwnedItems)
+      if (profileCoins >= demoUnlockCoinAmount) {
+        localStorage.setItem(
+          getOwnedItemsStorageKey(userId),
+          JSON.stringify(nextOwnedItems),
+        )
+      }
+      setCoins(profileCoins)
       setEquipped({
         accessory: normalizeAccessory(profileRow.accessory),
         color: localStorage.getItem(`pennymon-color-${userId}`) || 'Default',
         room: selectedRoom,
       })
     } else {
+      setOwnedItems(loadedOwnedItems)
       setEquipped((current) => ({
         ...current,
         color: localStorage.getItem(`pennymon-color-${userId}`) || 'Default',
@@ -517,6 +585,7 @@ function App() {
     }
 
     setIsDataLoading(false)
+    setHasLoadedMoneyData(true)
   }, [])
 
   useEffect(() => {
@@ -534,19 +603,34 @@ function App() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-    setExpenseForm((current) => ({
-      ...current,
-      accountId: current.accountId || accounts[0]?.id || '',
-      budgetId: current.budgetId || budgets[0]?.id || '',
-      debtAccountId:
-        current.debtAccountId ||
-        accounts.find(isDebtTargetAccount)?.id ||
-        '',
-    }))
+    setExpenseForm((current) => {
+      const amount = Number(current.amount)
+      const validExpenseAccounts = accounts.filter((account) => {
+        if (!isCreditLineAccount(account)) return true
+        if (Number.isNaN(amount) || amount <= 0) return true
+        return amount <= getCreditLineAvailable(account)
+      })
+      const currentAccountIsValid =
+        current.mode === 'debt' ||
+        validExpenseAccounts.some((account) => account.id === current.accountId)
+
+      return {
+        ...current,
+        accountId:
+          current.mode === 'expense' && !currentAccountIsValid
+            ? validExpenseAccounts[0]?.id || ''
+            : current.accountId || accounts[0]?.id || '',
+        budgetId: current.budgetId || budgets[0]?.id || '',
+        debtAccountId:
+          current.debtAccountId ||
+          accounts.find(isDebtTargetAccount)?.id ||
+          '',
+      }
+    })
     }, 0)
 
     return () => window.clearTimeout(timeoutId)
-  }, [accounts, budgets])
+  }, [accounts, budgets, expenseForm.amount])
 
   const submitAuth = async (event) => {
     event.preventDefault()
@@ -596,6 +680,7 @@ function App() {
     await signOut()
     loadedUserRef.current = ''
     setIsAuthenticated(false)
+    setHasLoadedMoneyData(false)
     setActiveTab('home')
     setActiveForm(null)
     setEditingId(null)
@@ -758,12 +843,16 @@ function App() {
     setIsPennyMonPresetsOpen(false)
 
     const fallbackAnswer = buildPennyMonReply(trimmedMessage)
+    const minimumThinkingDelay = new Promise((resolve) => setTimeout(resolve, 1500))
 
     try {
-      const { data, error } = await askPennyMon({
-        question: trimmedMessage,
-        summary: buildPennyMonSummary(),
-      })
+      const [{ data, error }] = await Promise.all([
+        askPennyMon({
+          question: trimmedMessage,
+          summary: buildPennyMonSummary(),
+        }),
+        minimumThinkingDelay,
+      ])
 
       if (error) throw error
 
@@ -781,6 +870,17 @@ function App() {
   }
 
   const handlePennyMonTap = () => {
+    const shouldBlockDoubleTap =
+      isPennyMonHelpOpen ||
+      isPennyMonPresetsOpen ||
+      isPennyMonThinking ||
+      Boolean(pennyMonAnswer)
+
+    if (shouldBlockDoubleTap) {
+      pennyMonLastTapRef.current = 0
+      return
+    }
+
     const currentTap = Date.now()
 
     if (currentTap - pennyMonLastTapRef.current < 320) {
@@ -960,46 +1060,51 @@ function App() {
     event.preventDefault()
     const amount = Number(walletForm.balance)
     if (!currentUser.id || !walletForm.name.trim() || Number.isNaN(amount)) return
+    setSavingAction('wallet')
 
-    const shouldBeDebt = isCreditLineAccount(walletForm)
-    const walletData = {
-      name: walletForm.name.trim(),
-      type: walletForm.type,
-      balance: amount,
-      tone: shouldBeDebt ? 'bg-rose-50' : 'bg-[#eeeaff]',
-    }
+    try {
+      const shouldBeDebt = isCreditLineAccount(walletForm)
+      const walletData = {
+        name: walletForm.name.trim(),
+        type: walletForm.type,
+        balance: amount,
+        tone: shouldBeDebt ? 'bg-rose-50' : 'bg-[#eeeaff]',
+      }
 
-    const { data, error } = await saveWalletRow({
-      editingId,
-      userId: currentUser.id,
-      walletData,
-    })
+      const { data, error } = await saveWalletRow({
+        editingId,
+        userId: currentUser.id,
+        walletData,
+      })
 
-    if (error) {
-      setDataError(error.message)
-      return
-    }
+      if (error) {
+        setDataError(error.message)
+        return
+      }
 
-    if (editingId) {
-      setAccounts((current) =>
-        current.map((account) =>
-          account.id === editingId ? mapWalletRow(data) : account,
-        ),
-      )
-      updatePiggyBankWallets(
-        data.id,
-        walletForm.isPiggyBank && isPiggyBankEligibleType(walletData.type),
-      )
-    } else {
-      setAccounts((current) => [mapWalletRow(data), ...current])
-      if (walletForm.isPiggyBank && isPiggyBankEligibleType(walletData.type)) {
-        updatePiggyBankWallets(data.id, true)
-        if (amount >= 5) {
-          recordPiggyBankDeposit(data.id, amount)
+      if (editingId) {
+        setAccounts((current) =>
+          current.map((account) =>
+            account.id === editingId ? mapWalletRow(data) : account,
+          ),
+        )
+        updatePiggyBankWallets(
+          data.id,
+          walletForm.isPiggyBank && isPiggyBankEligibleType(walletData.type),
+        )
+      } else {
+        setAccounts((current) => [mapWalletRow(data), ...current])
+        if (walletForm.isPiggyBank && isPiggyBankEligibleType(walletData.type)) {
+          updatePiggyBankWallets(data.id, true)
+          if (amount >= 5) {
+            recordPiggyBankDeposit(data.id, amount)
+          }
         }
       }
+      closeForm()
+    } finally {
+      setSavingAction('')
     }
-    closeForm()
   }
 
   const addWalletAmount = async (event) => {
@@ -1008,24 +1113,29 @@ function App() {
     const account = accounts.find((item) => item.id === editingId)
 
     if (!currentUser.id || !account || Number.isNaN(amount) || amount <= 0) return
+    setSavingAction('walletAmount')
 
-    const nextBalance = account.balance + amount
-    const { data, error } = await updateWalletBalance(account.id, nextBalance)
+    try {
+      const nextBalance = account.balance + amount
+      const { data, error } = await updateWalletBalance(account.id, nextBalance)
 
-    if (error) {
-      setDataError(error.message)
-      return
+      if (error) {
+        setDataError(error.message)
+        return
+      }
+
+      setAccounts((current) =>
+        current.map((item) =>
+          item.id === account.id ? mapWalletRow(data) : item,
+        ),
+      )
+      if (piggyBankWalletIds.includes(String(account.id)) && amount >= 5) {
+        recordPiggyBankDeposit(account.id, amount)
+      }
+      closeForm()
+    } finally {
+      setSavingAction('')
     }
-
-    setAccounts((current) =>
-      current.map((item) =>
-        item.id === account.id ? mapWalletRow(data) : item,
-      ),
-    )
-    if (piggyBankWalletIds.includes(String(account.id)) && amount >= 5) {
-      recordPiggyBankDeposit(account.id, amount)
-    }
-    closeForm()
   }
 
   const addBudgetLimit = async (event) => {
@@ -1034,52 +1144,62 @@ function App() {
     const budget = budgets.find((item) => item.id === editingId)
 
     if (!currentUser.id || !budget || Number.isNaN(amount) || amount <= 0) return
+    setSavingAction('budgetLimit')
 
-    const nextLimit = budget.limit + amount
-    const { data, error } = await updateBudgetLimit(budget.id, nextLimit)
+    try {
+      const nextLimit = budget.limit + amount
+      const { data, error } = await updateBudgetLimit(budget.id, nextLimit)
 
-    if (error) {
-      setDataError(error.message)
-      return
+      if (error) {
+        setDataError(error.message)
+        return
+      }
+
+      setBudgets((current) =>
+        current.map((item) =>
+          item.id === budget.id ? mapBudgetRow(data) : item,
+        ),
+      )
+      closeForm()
+    } finally {
+      setSavingAction('')
     }
-
-    setBudgets((current) =>
-      current.map((item) =>
-        item.id === budget.id ? mapBudgetRow(data) : item,
-      ),
-    )
-    closeForm()
   }
 
   const saveBudget = async (event) => {
     event.preventDefault()
     const limit = Number(budgetForm.limit)
     if (!currentUser.id || !budgetForm.name.trim() || Number.isNaN(limit) || limit <= 0) return
+    setSavingAction('budget')
 
-    const { data, error } = await saveBudgetRow({
-      budgetData: {
-        name: budgetForm.name.trim(),
-        limit,
-      },
-      editingId,
-      userId: currentUser.id,
-    })
+    try {
+      const { data, error } = await saveBudgetRow({
+        budgetData: {
+          name: budgetForm.name.trim(),
+          limit,
+        },
+        editingId,
+        userId: currentUser.id,
+      })
 
-    if (error) {
-      setDataError(error.message)
-      return
+      if (error) {
+        setDataError(error.message)
+        return
+      }
+
+      if (editingId) {
+        setBudgets((current) =>
+          current.map((budget) =>
+            budget.id === editingId ? mapBudgetRow(data) : budget,
+          ),
+        )
+      } else {
+        setBudgets((current) => [mapBudgetRow(data), ...current])
+      }
+      closeForm()
+    } finally {
+      setSavingAction('')
     }
-
-    if (editingId) {
-      setBudgets((current) =>
-        current.map((budget) =>
-          budget.id === editingId ? mapBudgetRow(data) : budget,
-        ),
-      )
-    } else {
-      setBudgets((current) => [mapBudgetRow(data), ...current])
-    }
-    closeForm()
   }
 
   const saveExpense = async (event) => {
@@ -1094,46 +1214,121 @@ function App() {
 
     if (!currentUser.id || Number.isNaN(amount) || amount <= 0 || !account) return
 
-    if (isDebtPayment) {
-      if (!debtAccount || !isDebtTargetAccount(debtAccount) || debtAccount.id === account.id) return
+    if (!isDebtPayment && isCreditLineAccount(account)) {
+      const availableLimit = getCreditLineAvailable(account)
 
-      const paymentAmount = isCreditLineAccount(debtAccount)
-        ? amount
-        : Math.min(amount, Math.abs(debtAccount.balance))
-      const nextAccountBalance = account.balance - paymentAmount
-      const nextDebtBalance = debtAccount.balance + paymentAmount
+      if (amount > availableLimit) {
+        setDataError(
+          `${account.name} only has RM${formatMoneyAmount(availableLimit)} limit left.`,
+        )
+        return
+      }
+    }
+
+    setSavingAction(isDebtPayment ? 'debt' : 'expense')
+
+    try {
+      if (isDebtPayment) {
+        if (!debtAccount || !isDebtTargetAccount(debtAccount) || debtAccount.id === account.id) return
+
+        const paymentAmount = isCreditLineAccount(debtAccount)
+          ? amount
+          : Math.min(amount, Math.abs(debtAccount.balance))
+        const nextAccountBalance = account.balance - paymentAmount
+        const nextDebtBalance = debtAccount.balance + paymentAmount
+        const [
+          { data: walletRow, error: walletError },
+          { data: debtWalletRow, error: debtWalletError },
+          { data: expenseRow, error: expenseError },
+        ] = await Promise.all([
+          updateWalletBalance(accountId, nextAccountBalance),
+          updateWalletBalance(debtAccount.id, nextDebtBalance),
+          insertExpenseRow({
+            account,
+            amount: paymentAmount,
+            budget: null,
+            date: expenseForm.date || getLocalDateKey(new Date()),
+            note: {
+              budgetName: `Debt: ${debtAccount.name}`,
+              text: expenseForm.note.trim() || `Payment to ${debtAccount.name}`,
+            },
+            userId: currentUser.id,
+          }),
+        ])
+
+        const error = walletError || debtWalletError || expenseError
+        if (error) {
+          setDataError(error.message)
+          return
+        }
+
+        setAccounts((current) =>
+          current.map((item) => {
+            if (item.id === accountId) return mapWalletRow(walletRow)
+            if (item.id === debtAccount.id) return mapWalletRow(debtWalletRow)
+            return item
+          }),
+        )
+        setExpenses((current) => [mapExpenseRow(expenseRow), ...current])
+        setSelectedHistoryMonth(getExpenseMonthKey(expenseRow.date))
+        setHistoryWeek(getWeekOfMonth(new Date(`${expenseRow.date}T00:00:00`)))
+        setExpenseForm({
+          amount: '',
+          accountId: accounts[0]?.id ? String(accounts[0].id) : '',
+          budgetId: budgets[0]?.id ? String(budgets[0].id) : '',
+          date: getLocalDateKey(new Date()),
+          debtAccountId: accounts.find(isDebtTargetAccount)?.id || '',
+          mode: 'debt',
+          note: '',
+        })
+        setIsCalendarOpen(false)
+        setSuccessMessage('Debt settled successfully.')
+        return
+      }
+
+      if (!budget) return
+
+      const nextAccountBalance = account.balance - amount
+      const nextBudgetSpent = budget.spent + amount
+
       const [
         { data: walletRow, error: walletError },
-        { data: debtWalletRow, error: debtWalletError },
+        { data: budgetRow, error: budgetError },
         { data: expenseRow, error: expenseError },
       ] = await Promise.all([
         updateWalletBalance(accountId, nextAccountBalance),
-        updateWalletBalance(debtAccount.id, nextDebtBalance),
+        updateBudgetSpent(budgetId, nextBudgetSpent),
         insertExpenseRow({
           account,
-          amount: paymentAmount,
-          budget: null,
+          amount,
+          budget,
           date: expenseForm.date || getLocalDateKey(new Date()),
           note: {
-            budgetName: `Debt: ${debtAccount.name}`,
-            text: expenseForm.note.trim() || `Payment to ${debtAccount.name}`,
+            text: expenseForm.note.trim() || 'Expense',
           },
           userId: currentUser.id,
         }),
       ])
 
-      const error = walletError || debtWalletError || expenseError
+      const error = walletError || budgetError || expenseError
       if (error) {
         setDataError(error.message)
         return
       }
 
       setAccounts((current) =>
-        current.map((item) => {
-          if (item.id === accountId) return mapWalletRow(walletRow)
-          if (item.id === debtAccount.id) return mapWalletRow(debtWalletRow)
-          return item
-        }),
+        current.map((account) =>
+          account.id === accountId
+            ? mapWalletRow(walletRow)
+            : account,
+        ),
+      )
+      setBudgets((current) =>
+        current.map((budget) =>
+          budget.id === budgetId
+            ? mapBudgetRow(budgetRow)
+            : budget,
+        ),
       )
       setExpenses((current) => [mapExpenseRow(expenseRow), ...current])
       setSelectedHistoryMonth(getExpenseMonthKey(expenseRow.date))
@@ -1144,72 +1339,14 @@ function App() {
         budgetId: budgets[0]?.id ? String(budgets[0].id) : '',
         date: getLocalDateKey(new Date()),
         debtAccountId: accounts.find(isDebtTargetAccount)?.id || '',
-        mode: 'debt',
+        mode: 'expense',
         note: '',
       })
       setIsCalendarOpen(false)
-      setSuccessMessage('Debt settled successfully.')
-      return
+      setSuccessMessage('Expense added successfully.')
+    } finally {
+      setSavingAction('')
     }
-
-    if (!budget) return
-
-    const nextAccountBalance = account.balance - amount
-    const nextBudgetSpent = budget.spent + amount
-
-    const [
-      { data: walletRow, error: walletError },
-      { data: budgetRow, error: budgetError },
-      { data: expenseRow, error: expenseError },
-    ] = await Promise.all([
-      updateWalletBalance(accountId, nextAccountBalance),
-      updateBudgetSpent(budgetId, nextBudgetSpent),
-      insertExpenseRow({
-        account,
-        amount,
-        budget,
-        date: expenseForm.date || getLocalDateKey(new Date()),
-        note: {
-          text: expenseForm.note.trim() || 'Expense',
-        },
-        userId: currentUser.id,
-      }),
-    ])
-
-    const error = walletError || budgetError || expenseError
-    if (error) {
-      setDataError(error.message)
-      return
-    }
-
-    setAccounts((current) =>
-      current.map((account) =>
-        account.id === accountId
-          ? mapWalletRow(walletRow)
-          : account,
-      ),
-    )
-    setBudgets((current) =>
-      current.map((budget) =>
-        budget.id === budgetId
-          ? mapBudgetRow(budgetRow)
-          : budget,
-      ),
-    )
-    setExpenses((current) => [mapExpenseRow(expenseRow), ...current])
-    setSelectedHistoryMonth(getExpenseMonthKey(expenseRow.date))
-    setHistoryWeek(getWeekOfMonth(new Date(`${expenseRow.date}T00:00:00`)))
-    setExpenseForm({
-      amount: '',
-      accountId: accounts[0]?.id ? String(accounts[0].id) : '',
-      budgetId: budgets[0]?.id ? String(budgets[0].id) : '',
-      date: getLocalDateKey(new Date()),
-      debtAccountId: accounts.find(isDebtTargetAccount)?.id || '',
-      mode: 'expense',
-      note: '',
-    })
-    setIsCalendarOpen(false)
-    setSuccessMessage('Expense added successfully.')
   }
 
   const deleteExpense = async (expense) => {
@@ -1329,6 +1466,13 @@ function App() {
   } px-5 pb-[calc(24px+env(safe-area-inset-bottom))] ${theme.page}`
   const isPennyMonShopOpen =
     isRoomPickerOpen || isColorPickerOpen || isAccessoryPickerOpen
+  const pennyMonAskTrayClass =
+    'fixed bottom-[calc(124px+env(safe-area-inset-bottom))] left-1/2 z-[120] w-full max-w-md -translate-x-1/2 px-5'
+  const pennyMonAnswerTrayClass =
+    'fixed bottom-[calc(160px+env(safe-area-inset-bottom))] left-1/2 z-[120] w-full max-w-md -translate-x-1/2 px-5'
+  const isHomeReady = hasLoadedMoneyData && arePennyMonImagesReady
+  const shouldShowHomeLoading = activeTab === 'home' && !isHomeReady && !dataError
+  const pendingExpenseAmount = Number(expenseForm.amount)
 
   if (!isAuthenticated) {
     return (
@@ -1349,9 +1493,13 @@ function App() {
     )
   }
 
+  if (activeTab === 'home' && !isHomeReady && !dataError) {
+    return <AppBootLoading />
+  }
+
   return (
     <main
-      className={`relative mx-auto flex h-dvh max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow}`}
+      className={`relative mx-auto flex h-dvh max-w-md flex-col overflow-hidden shadow-2xl ${theme.app} ${theme.shadow} animate-[tabPageIn_700ms_cubic-bezier(.2,.8,.2,1)_both]`}
     >
       {activeTab !== 'pennymon' && (
         <header className="flex items-center justify-between px-5 pb-3.5 pt-6">
@@ -1388,14 +1536,21 @@ function App() {
       )}
 
       <section
+        key={activeTab}
         className={
           activeTab === 'pennymon'
-            ? 'min-h-0 flex-1 overflow-hidden'
-            : pageScrollClass
+            ? 'min-h-0 flex-1 overflow-hidden animate-[tabPageIn_700ms_cubic-bezier(.2,.8,.2,1)_both]'
+            : `${pageScrollClass} animate-[tabPageIn_700ms_cubic-bezier(.2,.8,.2,1)_both]`
         }
       >
         {activeTab === 'home' && (
-          <div className="space-y-4 pt-3.5">
+          shouldShowHomeLoading ? (
+            <HomeLoadingState />
+          ) : (
+          <div
+            className="space-y-4 pt-3.5 animate-[homeContentIn_700ms_cubic-bezier(.2,.8,.2,1)_both]"
+            key={`home-${hasLoadedMoneyData ? 'ready' : 'error'}`}
+          >
             <div
               className="block h-[315px] w-full text-left [perspective:1200px]"
               onClick={() => {
@@ -1420,48 +1575,50 @@ function App() {
                 }}
               >
                 <div className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#6A4DF5] bg-[radial-gradient(circle_at_24%_7%,rgba(255,255,255,.28),transparent_34%),linear-gradient(135deg,#8d63ff_0%,#6A4DF5_48%,#4f35df_100%)] p-5 pt-7 text-white shadow-xl shadow-[#6A4DF5]/20 [backface-visibility:hidden]">
-                  <div className="absolute left-5 top-6 flex h-[138px] w-[48%] flex-col justify-center rounded-[1.6rem] bg-white/18 px-5 py-4 text-white ring-1 ring-white/25 backdrop-blur-md">
-                    <div className="flex items-start gap-2">
-                      <p className="min-w-0 flex-1 text-base font-bold leading-snug">
-                        PennyMon feels {pennyMonMood.toLowerCase()}.
+                  <div className="absolute inset-0 animate-[homeCardFaceIn_520ms_cubic-bezier(.2,.8,.2,1)_both] will-change-transform">
+                    <div className="absolute left-5 top-6 flex h-[138px] w-[48%] flex-col justify-center rounded-[1.6rem] bg-white/18 px-5 py-4 text-white ring-1 ring-white/25 backdrop-blur-md">
+                      <div className="flex items-start gap-2">
+                        <p className="min-w-0 flex-1 text-base font-bold leading-snug">
+                          PennyMon feels {pennyMonMood.toLowerCase()}.
+                        </p>
+                        <button
+                          className="grid size-6 shrink-0 place-items-center rounded-full bg-white/20 text-xs font-black text-white ring-1 ring-white/25"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setIsMoodInfoOpen(true)
+                          }}
+                          type="button"
+                        >
+                          ?
+                        </button>
+                      </div>
+                      <p className="mt-2 text-base font-medium leading-snug text-white/70">
+                        {pennyMonMoodQuotes[pennyMonMood]}
                       </p>
-                      <button
-                        className="grid size-6 shrink-0 place-items-center rounded-full bg-white/20 text-xs font-black text-white ring-1 ring-white/25"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setIsMoodInfoOpen(true)
-                        }}
-                        type="button"
-                      >
-                        ?
-                      </button>
                     </div>
-                    <p className="mt-2 text-base font-medium leading-snug text-white/70">
-                      {pennyMonMoodQuotes[pennyMonMood]}
-                    </p>
-                  </div>
-                  <div className="absolute -right-4 top-4">
-                    <PennyMonPet
-                      accessory={equipped.accessory}
-                      color={equipped.color}
-                      mood={pennyMonMood}
-                      size="home"
-                    />
-                  </div>
-                  <div className="absolute bottom-7 left-5 max-w-[72%] text-left">
-                    <p className="text-sm font-medium text-white/75">
-                      {formatHomeDate(todayStats.date)}
-                    </p>
-                    <h2 className="mt-2 text-[clamp(2.15rem,11vw,3.25rem)] font-semibold leading-none tracking-normal text-white">
-                      RM{formatMoneyAmount(todayStats.spent)}
-                    </h2>
-                    <p className="mt-2 text-base font-medium text-white/70">
-                      spent today
-                    </p>
-                  </div>
-                  <div className="absolute bottom-4 right-6 flex items-center gap-2 text-sm font-semibold text-white">
-                    <span>See insight</span>
-                    <ArrowRight size={20} strokeWidth={2.4} />
+                    <div className="absolute -right-4 top-4">
+                      <PennyMonPet
+                        accessory={equipped.accessory}
+                        color={equipped.color}
+                        mood={pennyMonMood}
+                        size="home"
+                      />
+                    </div>
+                    <div className="absolute bottom-7 left-5 max-w-[72%] text-left">
+                      <p className="text-sm font-medium text-white/75">
+                        {formatHomeDate(todayStats.date)}
+                      </p>
+                      <h2 className="mt-2 text-[clamp(2.15rem,11vw,3.25rem)] font-semibold leading-none tracking-normal text-white">
+                        RM{formatMoneyAmount(todayStats.spent)}
+                      </h2>
+                      <p className="mt-2 text-base font-medium text-white/70">
+                        spent today
+                      </p>
+                    </div>
+                    <div className="absolute bottom-4 right-6 flex items-center gap-2 text-sm font-semibold text-white">
+                      <span>See insight</span>
+                      <ArrowRight size={20} strokeWidth={2.4} />
+                    </div>
                   </div>
                   {isMoodInfoOpen && (
                     <div
@@ -1489,7 +1646,9 @@ function App() {
                 </div>
                 <div className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#6A4DF5] bg-[radial-gradient(circle_at_24%_0%,rgba(255,255,255,.28),transparent_34%),linear-gradient(135deg,#8d63ff_0%,#6A4DF5_48%,#4f35df_100%)] p-5 text-white shadow-xl shadow-[#6A4DF5]/20 [backface-visibility:hidden] [transform:rotateY(180deg)]">
                   <TodayInsight
+                    hasCompletedSetup={hasCompletedSetup}
                     onAddExpense={() => {
+                      if (!hasCompletedSetup) return
                       setIsSpendCardFlipped(false)
                       setActiveTab('expense')
                     }}
@@ -1565,6 +1724,7 @@ function App() {
               </div>
             </section>
           </div>
+          )
         )}
 
         {activeTab === 'wallets' && (
@@ -1583,15 +1743,29 @@ function App() {
               )}
               {sortedAccounts.map((account) => {
                 const isPiggyBank = piggyBankWalletIds.includes(String(account.id))
+                const isUnavailableCreditLine =
+                  isCreditLineAccount(account) && getCreditLineAvailable(account) <= 0
 
                 return (
-                  <div
-                  className={`relative rounded-2xl border p-3 text-slate-100 shadow-sm ${
-                    isPiggyBank
-                      ? 'border-[#6A4DF5]/45 bg-[#2f2a46]'
-                      : 'border-white/10 bg-[#2b2b32]'
-                  }`}
+                  <SwipeActionCard
+                    actionWidth={180}
+                    addLabel="Add"
+                    cardId={`wallet-${account.id}`}
+                    className={`relative rounded-2xl border p-3 text-slate-100 shadow-sm ${
+                      isPiggyBank
+                        ? 'border-[#6A4DF5]/45 bg-[#2f2a46]'
+                        : 'border-white/10 bg-[#2b2b32]'
+                    }`}
+                    draggedCard={draggedMoneyCard}
                     key={account.id}
+                    onAdd={() => openAddWalletAmount(account)}
+                    onDelete={() => deleteWallet(account.id)}
+                    onEdit={() => openEditWallet(account)}
+                    setDraggedCard={setDraggedMoneyCard}
+                    setSwipedCardId={setSwipedMoneyCardId}
+                    setTouchStartX={setTouchStartX}
+                    swipedCardId={swipedMoneyCardId}
+                    touchStartX={touchStartX}
                   >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -1608,6 +1782,11 @@ function App() {
                       <p className={`mt-1 text-xs ${isPiggyBank ? 'text-[#c8c0ff]' : 'text-slate-400'}`}>
                         {account.type}
                       </p>
+                      {isUnavailableCreditLine && (
+                        <p className="mt-1 text-[11px] font-semibold text-amber-300">
+                          Settle your debt to continue using this Pay later.
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <div className="text-right">
@@ -1630,14 +1809,9 @@ function App() {
                               : 'Available'}
                         </p>
                       </div>
-                      <CardActions
-                        onAddAmount={() => openAddWalletAmount(account)}
-                        onDelete={() => deleteWallet(account.id)}
-                        onEdit={() => openEditWallet(account)}
-                      />
                     </div>
                   </div>
-                </div>
+                </SwipeActionCard>
                 )
               })}
             </div>
@@ -1665,9 +1839,21 @@ function App() {
                 )
                 const isOverLimit = budget.spent >= budget.limit
                 return (
-                  <div
+                  <SwipeActionCard
+                    actionWidth={180}
+                    addLabel="Limit"
+                    cardId={`budget-${budget.id}`}
                     className="relative rounded-2xl border border-white/10 bg-[#2b2b32] p-3 text-slate-100 shadow-sm"
+                    draggedCard={draggedMoneyCard}
                     key={budget.id}
+                    onAdd={() => openAddBudgetLimit(budget)}
+                    onDelete={() => deleteBudget(budget.id)}
+                    onEdit={() => openEditBudget(budget)}
+                    setDraggedCard={setDraggedMoneyCard}
+                    setSwipedCardId={setSwipedMoneyCardId}
+                    setTouchStartX={setTouchStartX}
+                    swipedCardId={swipedMoneyCardId}
+                    touchStartX={touchStartX}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1678,12 +1864,6 @@ function App() {
                           RM{budget.spent} / RM{budget.limit}
                         </p>
                       </div>
-                      <CardActions
-                        addLabel="Add limit"
-                        onAddAmount={() => openAddBudgetLimit(budget)}
-                        onDelete={() => deleteBudget(budget.id)}
-                        onEdit={() => openEditBudget(budget)}
-                      />
                     </div>
                     <div className="mt-3 flex items-center gap-3">
                       <div className="h-3 flex-1 overflow-hidden rounded-full bg-white/10">
@@ -1711,7 +1891,7 @@ function App() {
                         ? `RM${formatMoneyAmount(budget.spent - budget.limit)} over limit`
                         : `RM${formatMoneyAmount(budget.limit - budget.spent)} left`}
                     </p>
-                  </div>
+                  </SwipeActionCard>
                 )
               })}
             </div>
@@ -1784,8 +1964,7 @@ function App() {
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Paid from">
-                  <select
-                    className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                  <ExpenseSelect
                     onChange={(event) =>
                       setExpenseForm((current) => ({
                         ...current,
@@ -1799,19 +1978,21 @@ function App() {
                       .filter((account) =>
                         expenseForm.mode === 'debt'
                           ? account.balance >= 0 && !isDebtTargetAccount(account)
-                          : true,
+                          : !isCreditLineAccount(account) ||
+                            Number.isNaN(pendingExpenseAmount) ||
+                            pendingExpenseAmount <= 0 ||
+                            pendingExpenseAmount <= getCreditLineAvailable(account),
                       )
                       .map((account) => (
                       <option key={account.id} value={account.id}>
                         {account.name}
                       </option>
                     ))}
-                  </select>
+                  </ExpenseSelect>
                 </Field>
                 {expenseForm.mode === 'expense' ? (
                   <Field label="Budget">
-                    <select
-                      className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                    <ExpenseSelect
                       onChange={(event) =>
                         setExpenseForm((current) => ({
                           ...current,
@@ -1826,12 +2007,11 @@ function App() {
                           {budget.name}
                         </option>
                       ))}
-                    </select>
+                    </ExpenseSelect>
                   </Field>
                 ) : (
                   <Field label="Debt">
-                  <select
-                    className="w-full rounded-2xl border border-white/10 bg-[#202020] px-3 py-3 text-slate-100 outline-none focus:border-[#6A4DF5]"
+                  <ExpenseSelect
                     onChange={(event) =>
                       setExpenseForm((current) => ({
                         ...current,
@@ -1848,7 +2028,7 @@ function App() {
                         {account.name}
                       </option>
                     ))}
-                  </select>
+                  </ExpenseSelect>
                 </Field>
                 )}
               </div>
@@ -1876,9 +2056,9 @@ function App() {
                   />
                 </Field>
               </div>
-              <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+              <AnimatedSubmitButton isSaving={savingAction === expenseForm.mode}>
                 {expenseForm.mode === 'debt' ? 'Settle debt' : 'Save expense'}
-              </button>
+              </AnimatedSubmitButton>
             </form>
 
             {isCalendarOpen && (
@@ -2052,8 +2232,16 @@ function App() {
                 </div>
               </div>
               <button
-                className="absolute right-4 top-[4.2rem] z-10 grid size-9 place-items-center rounded-full border border-white/15 bg-[#2f2e38] text-sm font-black text-white shadow-md"
-                onClick={() => setIsPennyMonHelpOpen(true)}
+                className={`absolute right-4 top-[4.2rem] z-10 grid size-9 place-items-center rounded-full border border-white/15 bg-[#2f2e38] text-sm font-black text-white shadow-md ${
+                  isPennyMonThinking ? 'pointer-events-none opacity-45' : ''
+                }`}
+                disabled={isPennyMonThinking}
+                onClick={() => {
+                  pennyMonLastTapRef.current = 0
+                  setIsPennyMonPresetsOpen(false)
+                  setPennyMonAnswer('')
+                  setIsPennyMonHelpOpen(true)
+                }}
                 type="button"
               >
                 ?
@@ -2079,7 +2267,9 @@ function App() {
                   {isPennyMonPresetsOpen && (
                     <PennyMonPresetQuestions
                       onAsk={sendPennyMonMessage}
+                      onClose={() => setIsPennyMonPresetsOpen(false)}
                       questions={pennyMonQuickQuestions}
+                      trayClassName={pennyMonAskTrayClass}
                     />
                   )}
                 </div>
@@ -2093,7 +2283,11 @@ function App() {
                 </div>
               </div>
 
-              {!isPennyMonShopOpen && !isPennyMonHelpOpen && (
+              {!isPennyMonShopOpen &&
+                !isPennyMonHelpOpen &&
+                !isPennyMonPresetsOpen &&
+                !isPennyMonThinking &&
+                !pennyMonAnswer && (
                 <div className="fixed bottom-[calc(112px+env(safe-area-inset-bottom))] left-1/2 z-[110] grid w-full max-w-md -translate-x-1/2 grid-cols-3 px-8">
                   <PennyMonDockButton
                     icon={Glasses}
@@ -2154,6 +2348,7 @@ function App() {
                 answer={pennyMonAnswer}
                 isThinking={isPennyMonThinking}
                 onClose={() => setPennyMonAnswer('')}
+                trayClassName={pennyMonAnswerTrayClass}
               />
               {isPennyMonHelpOpen && (
                 <PennyMonHelpCard onClose={() => setIsPennyMonHelpOpen(false)} />
@@ -2297,9 +2492,9 @@ function App() {
                 value={walletForm.balance}
               />
             </Field>
-            <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+            <AnimatedSubmitButton isSaving={savingAction === 'wallet'}>
               {editingId ? 'Update wallet' : 'Save wallet'}
-            </button>
+            </AnimatedSubmitButton>
           </form>
         </FormSheet>
       )}
@@ -2322,9 +2517,9 @@ function App() {
                 value={walletAmountForm.amount}
               />
             </Field>
-            <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+            <AnimatedSubmitButton isSaving={savingAction === 'walletAmount'}>
               Add amount
-            </button>
+            </AnimatedSubmitButton>
           </form>
         </FormSheet>
       )}
@@ -2347,9 +2542,9 @@ function App() {
                 value={walletAmountForm.amount}
               />
             </Field>
-            <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+            <AnimatedSubmitButton isSaving={savingAction === 'budgetLimit'}>
               Add limit
-            </button>
+            </AnimatedSubmitButton>
           </form>
         </FormSheet>
       )}
@@ -2388,9 +2583,9 @@ function App() {
                 value={budgetForm.limit}
               />
             </Field>
-            <button className="w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 font-semibold text-white shadow-lg shadow-[#6A4DF5]/20">
+            <AnimatedSubmitButton isSaving={savingAction === 'budget'}>
               {editingId ? 'Update budget' : 'Save budget'}
-            </button>
+            </AnimatedSubmitButton>
           </form>
         </FormSheet>
       )}
@@ -2414,20 +2609,82 @@ function App() {
   )
 }
 
-function PennyMonAnswerBubble({ answer, isThinking, onClose }) {
+function PennyMonAnswerBubble({ answer, isThinking, onClose, trayClassName }) {
   if (!answer && !isThinking) return null
 
   return (
-    <div className="absolute bottom-[15.1rem] left-5 right-5 z-20">
+    <div className={trayClassName}>
       <button
-        className="w-full rounded-3xl border border-black bg-white px-4 py-3 text-left text-sm font-bold leading-snug text-black shadow-xl shadow-black/25"
+        className="w-full rounded-[1.75rem] border border-white/12 bg-[#202020]/88 p-4 text-left shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur-2xl disabled:opacity-100"
         disabled={isThinking}
         onClick={onClose}
         type="button"
       >
-        {isThinking ? 'PennyMon is thinking...' : answer}
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#a99cff]">
+            PennyMon says
+          </p>
+          <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
+            {isThinking ? 'Thinking' : 'Tap to close'}
+          </span>
+        </div>
+        <p className="text-sm font-bold leading-snug text-white">
+          {isThinking ? (
+            <PennyMonThinkingDots />
+          ) : (
+            <TypewriterText key={answer} text={answer} />
+          )}
+        </p>
       </button>
     </div>
+  )
+}
+
+function PennyMonThinkingDots() {
+  return (
+    <span className="flex items-center gap-2">
+      <span className="text-slate-300">PennyMon is checking your money</span>
+      <span className="flex items-center gap-1" aria-hidden="true">
+        {[0, 1, 2].map((dot) => (
+          <span
+            className="size-1.5 animate-[pennyThinkingDot_1s_ease-in-out_infinite] rounded-full bg-[#a99cff]"
+            key={dot}
+            style={{ animationDelay: `${dot * 140}ms` }}
+          />
+        ))}
+      </span>
+    </span>
+  )
+}
+
+function TypewriterText({ text }) {
+  const [typedLength, setTypedLength] = useState(0)
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setTypedLength((current) => {
+        const next = current + 1
+
+        if (next >= text.length) {
+          window.clearInterval(intervalId)
+        }
+
+        return next
+      })
+    }, 18)
+
+    return () => window.clearInterval(intervalId)
+  }, [text])
+
+  const isTyping = typedLength < text.length
+
+  return (
+    <>
+      {text.slice(0, typedLength)}
+      {isTyping && (
+        <span className="ml-0.5 inline-block h-4 w-1 translate-y-0.5 animate-pulse rounded-full bg-[#a99cff]" />
+      )}
+    </>
   )
 }
 
@@ -2440,7 +2697,7 @@ function PennyMonHelpCard({ onClose }) {
         </div>
         <h3 className="mt-4 text-lg font-black text-white">Ask PennyMon</h3>
         <p className="mt-2 text-sm font-medium leading-snug text-slate-400">
-          Double tap PennyMon to show question bubbles. Pick one, and PennyMon will explain your spending, budget, wallet, debt, or mood.
+          Double tap PennyMon to open the Ask PennyMon card. Pick a quick question, and PennyMon will explain your spending, budget, wallet, debt, or mood.
         </p>
         <button
           className="mt-5 w-full rounded-2xl bg-[#6A4DF5] px-4 py-3 text-sm font-bold text-white shadow-lg shadow-[#6A4DF5]/20"
@@ -2454,28 +2711,47 @@ function PennyMonHelpCard({ onClose }) {
   )
 }
 
-function PennyMonPresetQuestions({ onAsk, questions }) {
-  const positions = [
-    'left-2 top-[18%] -translate-x-[54%]',
-    'left-2 top-1/2 -translate-x-[60%] -translate-y-1/2',
-    'left-2 bottom-[18%] -translate-x-[54%]',
-    'right-2 top-[18%] translate-x-[54%]',
-    'right-2 top-1/2 translate-x-[60%] -translate-y-1/2',
-    'right-2 bottom-[18%] translate-x-[54%]',
-  ]
-
+function PennyMonPresetQuestions({ onAsk, onClose, questions, trayClassName }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-30">
-      {questions.map((question, index) => (
-        <button
-          className={`pointer-events-auto absolute w-[6rem] rounded-2xl border border-[#6A4DF5]/30 bg-white/95 px-3 py-2.5 text-center text-[0.64rem] font-extrabold leading-tight text-[#24212f] shadow-lg shadow-black/20 ring-1 ring-white/65 backdrop-blur-md transition duration-300 hover:-translate-y-0.5 hover:bg-white active:scale-95 ${positions[index]}`}
-          key={question}
-          onClick={() => onAsk(question)}
-          type="button"
-        >
-          {question}
-        </button>
-      ))}
+    <div className={trayClassName}>
+      <div className="animate-[pennyTrayIn_1.5s_cubic-bezier(.2,.8,.2,1)_both] rounded-[1.75rem] border border-white/12 bg-[#202020]/88 p-2.5 text-left shadow-2xl shadow-black/45 ring-1 ring-white/10 backdrop-blur-2xl">
+        <div className="mb-3 flex items-center justify-between px-1">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#a99cff]">
+              Ask PennyMon
+            </p>
+            <p className="mt-0.5 text-xs font-semibold text-slate-400">
+              Pick a quick finance question
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
+              AI
+            </span>
+            <button
+              aria-label="Close Ask PennyMon"
+              className="grid size-7 place-items-center rounded-full bg-white/10 text-xs font-black text-slate-300 transition active:scale-95"
+              onClick={onClose}
+              type="button"
+            >
+              x
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {questions.map((question, index) => (
+            <button
+              className="animate-[pennyChipIn_380ms_cubic-bezier(.2,.8,.2,1)_both] rounded-2xl border border-white/10 bg-white/[0.08] px-3 py-2 text-left text-[0.72rem] font-extrabold leading-tight text-white shadow-sm transition active:scale-[0.98] active:bg-[#6A4DF5]/45"
+              key={question}
+              onClick={() => onAsk(question)}
+              style={{ animationDelay: `${120 + index * 46}ms` }}
+              type="button"
+            >
+              {question}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -2509,11 +2785,44 @@ function ConfirmPurchaseModal({ item, onCancel, onConfirm }) {
   )
 }
 
+function AnimatedSubmitButton({ children, isSaving }) {
+  return (
+    <button
+      className={`relative flex w-full items-center justify-center overflow-hidden rounded-2xl border px-4 py-3 font-semibold text-white shadow-lg transition active:scale-[0.98] ${
+        isSaving
+          ? 'border-white/12 bg-[#202020]/88 shadow-black/35 ring-1 ring-white/10 backdrop-blur-2xl'
+          : 'border-transparent bg-[#6A4DF5] shadow-[#6A4DF5]/20'
+      }`}
+      disabled={isSaving}
+      type="submit"
+    >
+      <span className="flex items-center gap-2">
+        <span>{isSaving ? 'Saving' : children}</span>
+        {isSaving && <AnimatedSavingDots />}
+      </span>
+    </button>
+  )
+}
+
+function AnimatedSavingDots() {
+  return (
+    <span className="flex items-center gap-1" aria-hidden="true">
+      {[0, 1, 2].map((dot) => (
+        <span
+          className="size-1.5 animate-[pennyThinkingDot_1s_ease-in-out_infinite] rounded-full bg-[#a99cff]"
+          key={dot}
+          style={{ animationDelay: `${dot * 140}ms` }}
+        />
+      ))}
+    </span>
+  )
+}
+
 function SuccessPopup({ message, onClose }) {
   return (
     <div className="absolute inset-0 z-[70] grid place-items-center bg-black/45 px-6 backdrop-blur-sm">
-      <div className="w-full max-w-xs rounded-[2rem] border border-white/10 bg-[#202020] p-5 text-center text-slate-100 shadow-2xl shadow-black/40">
-        <div className="mx-auto grid size-12 place-items-center rounded-full bg-[#6A4DF5] text-lg font-black text-white">
+      <div className="animate-[pennyTrayIn_1.5s_cubic-bezier(.2,.8,.2,1)_both] w-full max-w-xs rounded-[2rem] border border-white/10 bg-[#202020]/88 p-5 text-center text-slate-100 shadow-2xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-2xl">
+        <div className="mx-auto grid size-12 place-items-center rounded-full bg-[#6A4DF5] text-lg font-black text-white shadow-lg shadow-[#6A4DF5]/25">
           ✓
         </div>
         <p className="mt-4 text-lg font-bold text-white">Successful</p>
@@ -2542,24 +2851,30 @@ function PennyMonNavIcon({ size = 19 }) {
   )
 }
 
-function TodayInsight({ onAddExpense, stats }) {
+function TodayInsight({ hasCompletedSetup, onAddExpense, stats }) {
   if (!stats.count) {
     return (
       <div className="flex h-[calc(100%-2.25rem)] flex-col">
         <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-[1.75rem] bg-white/16 px-5 py-6 text-center ring-1 ring-white/25 backdrop-blur-md">
-          <p className="text-lg font-bold text-white">No spending yet</p>
+          <p className="text-lg font-bold text-white">
+            {hasCompletedSetup ? 'No spending yet' : 'Setup needed first'}
+          </p>
           <p className="mt-2 max-w-[14rem] text-sm font-medium leading-snug text-white/72">
-            No expenses recorded for today.
+            {hasCompletedSetup
+              ? 'No expenses recorded for today.'
+              : 'Add one wallet and one budget before logging expenses.'}
           </p>
           <button
-            className="mt-5 rounded-full bg-[#a99cff] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#3e2aaf]/20 transition active:scale-[0.98]"
+            className="mt-5 rounded-full bg-[#a99cff] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#3e2aaf]/20 transition active:scale-[0.98] disabled:bg-white/18 disabled:text-white/55 disabled:shadow-none"
+            disabled={!hasCompletedSetup}
             onClick={(event) => {
               event.stopPropagation()
+              if (!hasCompletedSetup) return
               onAddExpense()
             }}
             type="button"
           >
-            Add expense +
+            {hasCompletedSetup ? 'Add expense +' : 'Add wallet & budget first'}
           </button>
         </div>
         <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-white/65">
@@ -2845,6 +3160,7 @@ function AuthScreen({
   onSubmit,
 }) {
   const isSignup = authMode === 'signup'
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
 
   const updateField = (field, value) => {
     onChange((current) => ({
@@ -2854,9 +3170,12 @@ function AuthScreen({
   }
 
   return (
-    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[#202020] shadow-2xl shadow-black/40">
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[#202020] shadow-2xl shadow-black/40 animate-[tabPageIn_700ms_cubic-bezier(.2,.8,.2,1)_both]">
       <section className="grid min-h-0 flex-1 place-items-center overflow-hidden bg-[#202020] px-7">
-        <div className="w-full max-w-sm text-slate-100">
+        <div
+          className="w-full max-w-sm text-slate-100 animate-[tabPageIn_700ms_cubic-bezier(.2,.8,.2,1)_both]"
+          key={authMode}
+        >
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-[#6A4DF5] text-white">
               <PennyMonNavIcon size={26} />
@@ -2911,11 +3230,21 @@ function AuthScreen({
               value={authForm.email}
             />
             <AuthField
+              action={
+                <button
+                  aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
+                  className="grid size-8 shrink-0 place-items-center rounded-full text-slate-400 transition active:scale-95"
+                  onClick={() => setIsPasswordVisible((current) => !current)}
+                  type="button"
+                >
+                  {isPasswordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              }
               icon={Lock}
               label="Password"
               onChange={(event) => updateField('password', event.target.value)}
               placeholder="Minimum 6 characters"
-              type="password"
+              type={isPasswordVisible ? 'text' : 'password'}
               value={authForm.password}
             />
 
@@ -2970,6 +3299,7 @@ function AuthScreen({
 }
 
 function AuthField({
+  action,
   icon: Icon,
   label,
   onChange,
@@ -2991,6 +3321,7 @@ function AuthField({
           type={type}
           value={value}
         />
+        {action}
       </div>
     </label>
   )
@@ -3023,12 +3354,18 @@ function PennyMonPet({
       <img
         alt={`${mood} PennyMon`}
         className="h-full w-full object-contain drop-shadow-xl"
+        decoding="sync"
+        fetchPriority="high"
+        loading="eager"
         src={image}
       />
       {accessoryItem.image && (
         <img
           alt=""
           className="pointer-events-none absolute inset-0 h-full w-full object-contain drop-shadow-md"
+          decoding="sync"
+          fetchPriority="high"
+          loading="eager"
           src={accessoryItem.image}
         />
       )}
@@ -3319,57 +3656,114 @@ function AccessoryPickerModal({
   )
 }
 
-function CardActions({ addLabel = 'Add amount', onAddAmount, onDelete, onEdit }) {
-  const [isOpen, setIsOpen] = useState(false)
+function SwipeActionCard({
+  actionWidth = 216,
+  addLabel = 'Add',
+  cardId,
+  children,
+  className,
+  draggedCard,
+  onAdd,
+  onDelete,
+  onEdit,
+  setDraggedCard,
+  setSwipedCardId,
+  setTouchStartX,
+  swipedCardId,
+  touchStartX,
+}) {
+  const isDragging = draggedCard.id === cardId
+  const isOpen = swipedCardId === cardId
+  const translateX = isDragging
+    ? draggedCard.offset
+    : isOpen
+      ? -actionWidth
+      : 0
+
+  const closeActions = () => {
+    setSwipedCardId(null)
+    setDraggedCard({ id: null, offset: 0 })
+    setTouchStartX(null)
+  }
+
+  const runAction = (action) => {
+    closeActions()
+    action()
+  }
 
   return (
-    <div className="relative">
-      <button
-        className="grid size-8 place-items-center rounded-xl text-slate-400 hover:bg-white/10 hover:text-white"
-        onClick={() => setIsOpen((current) => !current)}
-        type="button"
+    <div className="relative overflow-hidden rounded-2xl bg-transparent">
+      <div
+        className="absolute inset-y-0 right-0 grid grid-cols-3 gap-1 py-1 pl-1 text-[10px] font-black text-white"
+        style={{ width: actionWidth }}
       >
-        <MoreHorizontal size={18} />
-      </button>
-      {isOpen && (
-        <div className="absolute right-0 top-9 z-20 w-36 overflow-hidden rounded-2xl border border-white/10 bg-[#202020] p-1 shadow-xl shadow-black/30">
-          {onAddAmount && (
-            <button
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/10"
-              onClick={() => {
-                setIsOpen(false)
-                onAddAmount()
-              }}
-              type="button"
-            >
-              <Plus size={13} />
-              {addLabel}
-            </button>
-          )}
-          <button
-            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/10"
-            onClick={() => {
-              setIsOpen(false)
-              onEdit()
-            }}
-            type="button"
-          >
-            <Edit3 size={13} />
+        <button
+          className="grid place-items-center rounded-2xl bg-[#6A4DF5] shadow-sm shadow-[#6A4DF5]/20"
+          onClick={() => runAction(onAdd)}
+          type="button"
+        >
+          <span className="flex flex-col items-center gap-1 leading-none">
+            <span className="grid size-7 place-items-center rounded-full bg-white/18">
+              <Plus size={15} />
+            </span>
+            {addLabel}
+          </span>
+        </button>
+        <button
+          className="grid place-items-center rounded-2xl bg-[#3a3a44]"
+          onClick={() => runAction(onEdit)}
+          type="button"
+        >
+          <span className="flex flex-col items-center gap-1 leading-none">
+            <span className="grid size-7 place-items-center rounded-full bg-white/14">
+              <Edit3 size={15} />
+            </span>
             Edit
-          </button>
-          <button
-            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-300 hover:bg-white/10"
-            onClick={() => {
-              setIsOpen(false)
-              onDelete()
-            }}
-            type="button"
-          >
-            <Trash2 size={13} />
+          </span>
+        </button>
+        <button
+          className="grid place-items-center rounded-2xl bg-[#b91c1c]"
+          onClick={() => runAction(onDelete)}
+          type="button"
+        >
+          <span className="flex flex-col items-center gap-1 leading-none">
+            <span className="grid size-7 place-items-center rounded-full bg-white/16">
+              <Trash2 size={15} />
+            </span>
             Delete
-          </button>
-        </div>
-      )}
+          </span>
+        </button>
+      </div>
+      <div
+        className={`touch-pan-y will-change-transform ${className}`}
+        onPointerCancel={closeActions}
+        onPointerDown={(event) => {
+          if (!event.isPrimary) return
+          event.currentTarget.setPointerCapture(event.pointerId)
+          setTouchStartX(event.clientX)
+          setSwipedCardId(null)
+        }}
+        onPointerMove={(event) => {
+          if (touchStartX === null) return
+          const deltaX = event.clientX - touchStartX
+          const offset = Math.max(Math.min(deltaX, 0), -actionWidth)
+          setDraggedCard({ id: cardId, offset })
+        }}
+        onPointerUp={(event) => {
+          if (touchStartX === null) return
+          const deltaX = event.clientX - touchStartX
+          setSwipedCardId(deltaX < -52 ? cardId : null)
+          setDraggedCard({ id: null, offset: 0 })
+          if (deltaX > 42) setSwipedCardId(null)
+          setTouchStartX(null)
+        }}
+        style={{
+          transform: `translateX(${translateX}px)`,
+          transition: isDragging ? 'none' : 'transform 420ms cubic-bezier(.22,1,.36,1)',
+        }}
+      >
+        {children}
+      </div>
     </div>
   )
 }
@@ -3382,6 +3776,42 @@ function Stat({ label, value }) {
       </p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>
+  )
+}
+
+function HomeLoadingState() {
+  return (
+    <div className="space-y-4 pt-3.5 animate-[homeContentIn_700ms_cubic-bezier(.2,.8,.2,1)_both]">
+      <div className="grid h-[315px] place-items-center rounded-[2rem] bg-[#6A4DF5] bg-[radial-gradient(circle_at_24%_7%,rgba(255,255,255,.28),transparent_34%),linear-gradient(135deg,#8d63ff_0%,#6A4DF5_48%,#4f35df_100%)] p-5 text-center text-white shadow-xl shadow-[#6A4DF5]/20">
+        <div className="rounded-[1.75rem] bg-white/18 px-5 py-4 ring-1 ring-white/25 backdrop-blur-md">
+          <p className="text-sm font-bold text-white/75">Preparing PennyMon</p>
+          <div className="mt-2 flex items-center justify-center gap-2 text-lg font-black text-white">
+            <span>Syncing your home</span>
+            <AnimatedSavingDots />
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {[0, 1, 2].map((item) => (
+          <div
+            className="h-[74px] rounded-3xl border border-white/10 bg-[#2f2e38] opacity-70"
+            key={item}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AppBootLoading() {
+  return (
+    <main className="relative mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[#202020] px-5 pt-6 shadow-2xl shadow-black/40">
+      <div className="pb-3.5">
+        <p className="text-sm font-semibold text-[#6A4DF5]">PennyMon</p>
+        <h1 className="text-2xl font-semibold text-white">Preparing home</h1>
+      </div>
+      <HomeLoadingState />
+    </main>
   )
 }
 
@@ -3425,6 +3855,23 @@ function Field({ children, label }) {
   )
 }
 
+function ExpenseSelect({ children, onChange, value }) {
+  return (
+    <div className="relative">
+      <select
+        className="min-h-[3.25rem] w-full appearance-none rounded-2xl border border-white/10 bg-[#171717] px-4 py-3 pr-10 text-sm font-bold text-slate-100 shadow-inner shadow-black/20 outline-none transition focus:border-[#6A4DF5] focus:ring-2 focus:ring-[#6A4DF5]/20"
+        onChange={onChange}
+        value={value}
+      >
+        {children}
+      </select>
+      <span className="pointer-events-none absolute right-3 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full bg-white/[0.06] text-slate-400">
+        <ChevronDown size={16} strokeWidth={2.6} />
+      </span>
+    </div>
+  )
+}
+
 function ActionHeader({ icon: Icon, title, subtitle, onAction }) {
   return (
     <div className="flex items-center justify-between rounded-[2rem] bg-[#171717] p-5 text-white shadow-lg shadow-black/30">
@@ -3446,11 +3893,3 @@ function ActionHeader({ icon: Icon, title, subtitle, onAction }) {
 }
 
 export default App
-
-
-
-
-
-
-
-

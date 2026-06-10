@@ -26,6 +26,110 @@ PennyMon makes money tracking feel like caring for a virtual companion. Users lo
 - AI question presets using Supabase Edge Function + Gemini API
 - Mobile-first dark interface with fixed bottom navigation
 
+## Feature Guide
+
+### Authentication and Onboarding
+
+Users register or log in with email and password through Supabase Auth. New users are guided to create at least one wallet and one budget before the Expense and PennyMon pages become useful. This prevents users from logging incomplete expenses without a money source or budget category.
+
+### Wallets
+
+Wallets represent where money comes from. Supported wallet types include Bank, Cash, E-wallet, Credit, and Pay later. Bank, Cash, and E-wallet balances contribute to available cash. Credit and Pay later wallets are treated as credit-line accounts, where the balance represents the usable remaining limit.
+
+Wallet cards support left-swipe actions for adding amount, editing, and deleting. PiggyBank wallets can be marked as protected savings so they are excluded from safe-to-spend calculations.
+
+### Pay Later and Debt Control
+
+Pay later and credit wallets are restricted during expense entry. If the user enters an expense amount that exceeds the wallet's available limit, that Pay later or credit wallet is hidden from the `Paid from` dropdown. If a Pay later wallet has no usable limit left, the wallet page tells the user to settle the debt before continuing to use it.
+
+Debt settlement is handled through the Expense page's `Debt` mode. A payment updates the paying wallet, reduces the target debt wallet, and records the payment in expense history.
+
+### Budgets
+
+Budgets track category limits such as Food, Transport, and Entertainment. Each budget shows spent amount, limit amount, progress percentage, and over-limit feedback. Budget cards also support left-swipe actions for adding limit, editing, and deleting.
+
+### Expenses
+
+The Expense page lets users record spending by selecting amount, paid-from wallet, budget category, date, and note. Saving an expense updates the wallet balance, the budget spent amount, expense history, today's spending, and PennyMon mood.
+
+### Home Dashboard
+
+The Home page summarizes the user's current financial state. It shows today's spending, available balance, debt, true balance, daily quests, and PennyMon's current mood. The main purple card can be flipped to show a daily spending insight.
+
+### Expense History and Weekly Graph
+
+Expense history is grouped by month and week. By default, it opens to the current month. The graph shows recent spending trends so users can understand spending behavior over time instead of only viewing individual transactions.
+
+### Daily Quests and Monny
+
+Daily quests reward positive money habits with Monny. Monny is the in-app reward currency used to customize PennyMon. Quest state is currently stored locally for the prototype.
+
+### PennyMon Customization
+
+Users can customize PennyMon with rooms, colors, and accessories. These items create a gamified loop: users track money, complete quests, earn Monny, and personalize their companion.
+
+### Ask PennyMon
+
+Users can double tap PennyMon to open quick question prompts such as `Budget check`, `Debt check`, and `Can I spend today?`. The app sends a financial summary to a Supabase Edge Function, which calls Gemini for a short response. If the AI service is unavailable, the app falls back to local rule-based answers.
+
+## PennyMon Mood Rules
+
+PennyMon mood is calculated from budgets, debt, today's spending, and shop activity. The rules are checked in priority order, so higher-risk financial conditions override lower-risk moods.
+
+| Angry | Sad | Worried |
+|---|---|---|
+| <img src="src/assets/pennymon/angry.png" alt="Angry PennyMon" width="120" /> | <img src="src/assets/pennymon/sad.png" alt="Sad PennyMon" width="120" /> | <img src="src/assets/pennymon/worried.png" alt="Worried PennyMon" width="120" /> |
+
+| Excited | Calm | Happy |
+|---|---|---|
+| <img src="src/assets/pennymon/excited.png" alt="Excited PennyMon" width="120" /> | <img src="src/assets/pennymon/calm.png" alt="Calm PennyMon" width="120" /> | <img src="src/assets/pennymon/happy.png" alt="Happy PennyMon" width="120" /> |
+
+### Angry
+
+<img src="src/assets/pennymon/angry.png" alt="Angry PennyMon" width="120" />
+
+PennyMon becomes Angry if any budget reaches `120%` or more of its limit.
+
+Example: a budget with RM100 limit becomes Angry at RM120 spent or higher.
+
+PennyMon also becomes Angry if total debt is higher than available cash.
+
+Example: available cash is RM100, but debt is RM150.
+
+### Sad
+
+<img src="src/assets/pennymon/sad.png" alt="Sad PennyMon" width="120" />
+
+PennyMon becomes Sad if any budget is over its limit but below the 120% Angry threshold.
+
+Example: a budget with RM100 limit and RM105 spent.
+
+### Worried
+
+<img src="src/assets/pennymon/worried.png" alt="Worried PennyMon" width="120" />
+
+PennyMon becomes Worried if any budget has used `90%` or more of its limit.
+
+Example: a budget with RM100 limit and RM90 spent.
+
+### Excited
+
+<img src="src/assets/pennymon/excited.png" alt="Excited PennyMon" width="120" />
+
+PennyMon becomes Excited if the user bought a PennyMon shop item today and still has at least RM50 safe-to-spend per day.
+
+### Calm
+
+<img src="src/assets/pennymon/calm.png" alt="Calm PennyMon" width="120" />
+
+PennyMon becomes Calm when the user has logged spending today and budgets are still under control.
+
+### Happy
+
+<img src="src/assets/pennymon/happy.png" alt="Happy PennyMon" width="120" />
+
+Happy is the default stable mood. PennyMon is Happy when there are no urgent budget, debt, or spending concerns.
+
 ## Tech Stack
 
 - React 19: frontend UI
@@ -200,45 +304,45 @@ PennyMon sends the selected question and a finance summary to the Edge Function.
 
 ## Screenshots
 
-<p>
-  <img src="docs/screenshots/screenshot-01.png" alt="PennyMon app screenshot 1" width="220" />
-  <img src="docs/screenshots/screenshot-02.png" alt="PennyMon app screenshot 2" width="220" />
-  <img src="docs/screenshots/screenshot-03.png" alt="PennyMon app screenshot 3" width="220" />
-</p>
+### Part 1: First-Time User Setup
 
-<p>
-  <img src="docs/screenshots/screenshot-04.png" alt="PennyMon app screenshot 4" width="220" />
-  <img src="docs/screenshots/screenshot-05.png" alt="PennyMon app screenshot 5" width="220" />
-  <img src="docs/screenshots/screenshot-06.png" alt="PennyMon app screenshot 6" width="220" />
-</p>
+| Create Account | Locked First-Time Dashboard | Add First Wallet |
+|---|---|---|
+| <img src="docs/screenshots/part-1-01-create-account.png" alt="Create Account" width="220" /> | <img src="docs/screenshots/part-1-02-locked-dashboard.png" alt="Locked First-Time Dashboard" width="220" /> | <img src="docs/screenshots/part-1-03-add-first-wallet.png" alt="Add First Wallet" width="220" /> |
 
-<p>
-  <img src="docs/screenshots/screenshot-07.png" alt="PennyMon app screenshot 7" width="220" />
-  <img src="docs/screenshots/screenshot-08.png" alt="PennyMon app screenshot 8" width="220" />
-  <img src="docs/screenshots/screenshot-09.png" alt="PennyMon app screenshot 9" width="220" />
-</p>
+| Add First Budget | Unlocked Navigation | Add First Expense |
+|---|---|---|
+| <img src="docs/screenshots/part-1-04-add-first-budget.png" alt="Add First Budget" width="220" /> | <img src="docs/screenshots/part-1-05-unlocked-navigation.png" alt="Unlocked Navigation" width="220" /> | <img src="docs/screenshots/part-1-06-add-first-expense.png" alt="Add First Expense" width="220" /> |
 
-<p>
-  <img src="docs/screenshots/screenshot-10.png" alt="PennyMon app screenshot 10" width="220" />
-  <img src="docs/screenshots/screenshot-11.png" alt="PennyMon app screenshot 11" width="220" />
-  <img src="docs/screenshots/screenshot-12.png" alt="PennyMon app screenshot 12" width="220" />
-</p>
+### Part 2: Demo Account With Rich Data
 
-<p>
-  <img src="docs/screenshots/screenshot-13.png" alt="PennyMon app screenshot 13" width="220" />
-  <img src="docs/screenshots/screenshot-14.png" alt="PennyMon app screenshot 14" width="220" />
-  <img src="docs/screenshots/screenshot-15.png" alt="PennyMon app screenshot 15" width="220" />
-</p>
+| Demo Account Dashboard | PennyMon Mood Explanation | Daily Insight Card |
+|---|---|---|
+| <img src="docs/screenshots/part-2-01-demo-dashboard.png" alt="Demo Account Dashboard" width="220" /> | <img src="docs/screenshots/part-2-02-mood-explanation.png" alt="PennyMon Mood Explanation" width="220" /> | <img src="docs/screenshots/part-2-03-daily-insight-card.png" alt="Daily Insight Card" width="220" /> |
 
-<p>
-  <img src="docs/screenshots/screenshot-16.png" alt="PennyMon app screenshot 16" width="220" />
-  <img src="docs/screenshots/screenshot-17.png" alt="PennyMon app screenshot 17" width="220" />
-  <img src="docs/screenshots/screenshot-18.png" alt="PennyMon app screenshot 18" width="220" />
-</p>
+| Daily Quests | Wallet Overview | Wallet Swipe Actions |
+|---|---|---|
+| <img src="docs/screenshots/part-2-04-daily-quests.png" alt="Daily Quests" width="220" /> | <img src="docs/screenshots/part-2-05-wallet-overview.png" alt="Wallet Overview" width="220" /> | <img src="docs/screenshots/part-2-06-wallet-swipe-actions.png" alt="Wallet Swipe Actions" width="220" /> |
 
-<p>
-  <img src="docs/screenshots/screenshot-19.png" alt="PennyMon app screenshot 19" width="220" />
-</p>
+| PayLater Limit Protection | Budget Overview | Budget Swipe Actions |
+|---|---|---|
+| <img src="docs/screenshots/part-2-07-paylater-limit-protection.png" alt="PayLater Limit Protection" width="220" /> | <img src="docs/screenshots/part-2-08-budget-overview.png" alt="Budget Overview" width="220" /> | <img src="docs/screenshots/part-2-09-budget-swipe-actions.png" alt="Budget Swipe Actions" width="220" /> |
+
+| Add Expense Form | Smart Wallet Dropdown | PayLater Hidden When Limit Is Exceeded |
+|---|---|---|
+| <img src="docs/screenshots/part-2-10-add-expense-form.png" alt="Add Expense Form" width="220" /> | <img src="docs/screenshots/part-2-11-smart-wallet-dropdown.png" alt="Smart Wallet Dropdown" width="220" /> | <img src="docs/screenshots/part-2-12-paylater-hidden.png" alt="PayLater Hidden When Limit Is Exceeded" width="220" /> |
+
+| Expense Saved Successfully | Current Month Expense History | Weekly Spending Trend |
+|---|---|---|
+| <img src="docs/screenshots/part-2-13-expense-saved.png" alt="Expense Saved Successfully" width="220" /> | <img src="docs/screenshots/part-2-14-current-month-history.png" alt="Current Month Expense History" width="220" /> | <img src="docs/screenshots/part-2-15-weekly-spending-trend.png" alt="Weekly Spending Trend" width="220" /> |
+
+| Previous Month History | PennyMon Customization | Ask PennyMon |
+|---|---|---|
+| <img src="docs/screenshots/part-2-16-previous-month-history.png" alt="Previous Month History" width="220" /> | <img src="docs/screenshots/part-2-17-pennymon-customization.png" alt="PennyMon Customization" width="220" /> | <img src="docs/screenshots/part-2-18-ask-pennymon.png" alt="Ask PennyMon" width="220" /> |
+
+| AI Answer |
+|---|
+| <img src="docs/screenshots/part-2-19-ai-answer.png" alt="AI Answer" width="220" /> |
 
 ## Demo Data
 
@@ -248,7 +352,7 @@ For final-round rehearsal or judging, use the repeatable seed file:
 supabase/demo_seed.sql
 ```
 
-Create/register the demo auth user first, then run the SQL file in the Supabase SQL editor. Use this prepared account:
+Create/register the final demo auth user first, then run the SQL file in the Supabase SQL editor.
 
 ```txt
 Email: pennymondemo@gmail.com
@@ -257,10 +361,6 @@ Username: PennyMon Demo
 ```
 
 The seed resets only that user's PennyMon data and inserts realistic wallets, budgets, expenses, PayLater debt, PiggyBank savings, and PennyMon profile coins. A suggested live walkthrough is documented in `docs/DEMO_WALKTHROUGH.md`.
-
-## Demo Account
-
-Prepared final demo account: `pennymondemo@gmail.com` / `pennymondemo11`. Create this account in Supabase Auth or through app signup before running `supabase/demo_seed.sql`.
 
 ## Known Limitations
 
@@ -304,4 +404,5 @@ Prepared final demo account: `pennymondemo@gmail.com` / `pennymondemo11`. Create
 ## License
 
 This project is licensed under the MIT License. See `LICENSE`.
+
 
