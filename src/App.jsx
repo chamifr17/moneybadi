@@ -47,7 +47,65 @@ import orangeWorriedPennyMon from './assets/pennymon/colors/orange/worried.png'
 import sadPennyMon from './assets/pennymon/sad.png'
 import spaceRoom from './assets/pennymon/rooms/space.png'
 import worriedPennyMon from './assets/pennymon/worried.png'
-import { supabase } from './lib/supabase'
+import {
+  getCurrentSession,
+  onAuthStateChange,
+  signInWithEmail,
+  signOut,
+  signUpWithEmail,
+} from './features/auth/services/authService'
+import { askPennyMon } from './features/ai/services/pennyMonAiService'
+import {
+  calculateDebt,
+  calculateSafeSpend,
+  getExpenseMonths,
+  getPennyMonMood,
+  getPennyMonMoodReason,
+  getSpendingGraphData,
+  getTodayStats,
+  groupExpenses,
+  isCreditLineAccount,
+  isDebtTargetAccount,
+  isPiggyBankEligibleType,
+} from './features/money/utils/finance'
+import {
+  deleteBudgetById,
+  deleteExpenseById,
+  deleteWalletById,
+  insertExpenseRow,
+  loadMoneyRows,
+  saveBudgetRow,
+  saveWalletRow,
+  updateBudgetLimit,
+  updateBudgetSpent,
+  updateWalletBalance,
+} from './features/money/services/moneyService'
+import { mapBudgetRow, mapExpenseRow, mapWalletRow } from './features/money/utils/mappers'
+import { savePennyMonProfile } from './features/pennymon/services/pennyMonProfileService'
+import { getDailyQuests } from './features/quests/utils/quests'
+import {
+  getOwnedItemsStorageKey,
+  getPiggyBankDepositStorageKey,
+  getPiggyBankStorageKey,
+  getPurchaseStorageKey,
+  getQuestStorageKey,
+  loadClaimedQuestIds,
+  loadOwnedItems,
+  loadPiggyBankDepositTodayIds,
+  loadPiggyBankWalletIds,
+  loadPurchasedTodayIds,
+} from './shared/storage/pennymonStorage'
+import {
+  formatCalendarTitle,
+  formatExpenseDate,
+  formatHomeDate,
+  formatWeekRange,
+  getCalendarDays,
+  getExpenseMonthKey,
+  getLocalDateKey,
+  getWeekOfMonth,
+} from './shared/utils/date'
+import { formatMoneyAmount } from './shared/utils/money'
 
 const pennyMonImages = {
   Angry: angryPennyMon,
@@ -188,16 +246,6 @@ const roomOptions = [
   },
 ]
 
-const creditLineTypes = ['Credit', 'Pay later']
-
-const isCreditLineAccount = (account) =>
-  creditLineTypes.includes(account?.type)
-
-const isDebtTargetAccount = (account) =>
-  isCreditLineAccount(account) || account?.balance < 0
-
-const isPiggyBankEligibleType = (type) =>
-  ['Bank', 'E-wallet'].includes(type)
 
 const defaultOwnedItems = {
   accessories: ['None', 'Glasses'],
@@ -398,14 +446,14 @@ function App() {
       setIsAuthenticated(true)
     }
 
-    supabase.auth.getSession().then(({ data }) => {
+    getCurrentSession().then(({ data }) => {
       setUserFromSession(data.session)
       setIsAuthLoading(false)
     })
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = onAuthStateChange((_event, session) => {
       setUserFromSession(session)
       setIsAuthLoading(false)
     })
@@ -417,26 +465,20 @@ function App() {
     setIsDataLoading(true)
     setDataError('')
 
-    const [
-      { data: walletRows, error: walletError },
-      { data: budgetRows, error: budgetError },
-      { data: expenseRows, error: expenseError },
-      { data: profileRow, error: profileError },
-    ] = await Promise.all([
-      supabase.from('wallets').select('*').order('created_at', { ascending: true }),
-      supabase.from('budgets').select('*').order('created_at', { ascending: true }),
-      supabase.from('expenses').select('*').order('date', { ascending: false }),
-      supabase.from('pennymon_profiles').select('*').eq('user_id', userId).maybeSingle(),
-    ])
-
-    const error = walletError || budgetError || expenseError || profileError
+    const {
+      budgetRows,
+      error,
+      expenseRows,
+      profileRow,
+      walletRows,
+    } = await loadMoneyRows(userId)
     if (error) {
       setDataError(error.message)
       setIsDataLoading(false)
       return
     }
 
-    const loadedOwnedItems = loadOwnedItems(userId)
+    const loadedOwnedItems = loadOwnedItems(userId, defaultOwnedItems)
     const loadedPiggyBankWalletIds = loadPiggyBankWalletIds(userId)
     setAccounts(walletRows.map(mapWalletRow))
     setBudgets(budgetRows.map(mapBudgetRow))
@@ -506,16 +548,12 @@ function App() {
 
     const authRequest =
       authMode === 'signup'
-        ? supabase.auth.signUp({
+        ? signUpWithEmail({
             email: authForm.email.trim(),
+            name: authForm.name.trim(),
             password: authForm.password,
-            options: {
-              data: {
-                full_name: authForm.name.trim() || authForm.email.split('@')[0],
-              },
-            },
           })
-        : supabase.auth.signInWithPassword({
+        : signInWithEmail({
             email: authForm.email.trim(),
             password: authForm.password,
           })
@@ -530,7 +568,7 @@ function App() {
 
     if (authMode === 'signup') {
       if (data.session) {
-        await supabase.auth.signOut()
+        await signOut()
         setIsAuthenticated(false)
       }
       setAuthMode('login')
@@ -545,7 +583,7 @@ function App() {
   }
 
   const logout = async () => {
-    await supabase.auth.signOut()
+    await signOut()
     loadedUserRef.current = ''
     setIsAuthenticated(false)
     setActiveTab('home')
@@ -561,18 +599,13 @@ function App() {
 
     if (!currentUser.id) return
 
-    const { error } = await supabase
-      .from('pennymon_profiles')
-      .upsert(
-        {
-          user_id: currentUser.id,
-          coins: nextCoins,
-          mood: pennyMonMood,
-          accessory: equipped.accessory,
-          room: equipped.room,
-        },
-        { onConflict: 'user_id' },
-      )
+    const { error } = await savePennyMonProfile({
+      accessory: equipped.accessory,
+      coins: nextCoins,
+      mood: pennyMonMood,
+      room: equipped.room,
+      userId: currentUser.id,
+    })
 
     if (error) setDataError(error.message)
   }
@@ -717,11 +750,9 @@ function App() {
     const fallbackAnswer = buildPennyMonReply(trimmedMessage)
 
     try {
-      const { data, error } = await supabase.functions.invoke('ask-pennymon', {
-        body: {
-          question: trimmedMessage,
-          summary: buildPennyMonSummary(),
-        },
+      const { data, error } = await askPennyMon({
+        question: trimmedMessage,
+        summary: buildPennyMonSummary(),
       })
 
       if (error) throw error
@@ -789,18 +820,13 @@ function App() {
 
     if (!currentUser.id) return
 
-    const { error } = await supabase
-      .from('pennymon_profiles')
-      .upsert(
-        {
-          user_id: currentUser.id,
-          coins,
-          mood: pennyMonMood,
-          accessory: equipped.accessory,
-          room: room.id,
-        },
-        { onConflict: 'user_id' },
-      )
+    const { error } = await savePennyMonProfile({
+      accessory: equipped.accessory,
+      coins,
+      mood: pennyMonMood,
+      room: room.id,
+      userId: currentUser.id,
+    })
 
     if (error) setDataError(error.message)
   }
@@ -824,18 +850,13 @@ function App() {
 
     if (!currentUser.id) return
 
-    const { error } = await supabase
-      .from('pennymon_profiles')
-      .upsert(
-        {
-          user_id: currentUser.id,
-          coins,
-          mood: pennyMonMood,
-          accessory: accessory.id,
-          room: equipped.room,
-        },
-        { onConflict: 'user_id' },
-      )
+    const { error } = await savePennyMonProfile({
+      accessory: accessory.id,
+      coins,
+      mood: pennyMonMood,
+      room: equipped.room,
+      userId: currentUser.id,
+    })
 
     if (error) setDataError(error.message)
   }
@@ -903,7 +924,7 @@ function App() {
   }
 
   const deleteWallet = async (id) => {
-    const { error } = await supabase.from('wallets').delete().eq('id', id)
+    const { error } = await deleteWalletById(id)
 
     if (error) {
       setDataError(error.message)
@@ -915,7 +936,7 @@ function App() {
   }
 
   const deleteBudget = async (id) => {
-    const { error } = await supabase.from('budgets').delete().eq('id', id)
+    const { error } = await deleteBudgetById(id)
 
     if (error) {
       setDataError(error.message)
@@ -938,25 +959,18 @@ function App() {
       tone: shouldBeDebt ? 'bg-rose-50' : 'bg-[#eeeaff]',
     }
 
+    const { data, error } = await saveWalletRow({
+      editingId,
+      userId: currentUser.id,
+      walletData,
+    })
+
+    if (error) {
+      setDataError(error.message)
+      return
+    }
+
     if (editingId) {
-      const { data, error } = await supabase
-        .from('wallets')
-        .update({
-          name: walletData.name,
-          type: walletData.type,
-          balance: walletData.balance,
-          tone: walletData.tone,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingId)
-        .select()
-        .single()
-
-      if (error) {
-        setDataError(error.message)
-        return
-      }
-
       setAccounts((current) =>
         current.map((account) =>
           account.id === editingId ? mapWalletRow(data) : account,
@@ -967,23 +981,6 @@ function App() {
         walletForm.isPiggyBank && isPiggyBankEligibleType(walletData.type),
       )
     } else {
-      const { data, error } = await supabase
-        .from('wallets')
-        .insert({
-          user_id: currentUser.id,
-          name: walletData.name,
-          type: walletData.type,
-          balance: walletData.balance,
-          tone: walletData.tone,
-        })
-        .select()
-        .single()
-
-      if (error) {
-        setDataError(error.message)
-        return
-      }
-
       setAccounts((current) => [mapWalletRow(data), ...current])
       if (walletForm.isPiggyBank && isPiggyBankEligibleType(walletData.type)) {
         updatePiggyBankWallets(data.id, true)
@@ -1003,15 +1000,7 @@ function App() {
     if (!currentUser.id || !account || Number.isNaN(amount) || amount <= 0) return
 
     const nextBalance = account.balance + amount
-    const { data, error } = await supabase
-      .from('wallets')
-      .update({
-        balance: nextBalance,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', account.id)
-      .select()
-      .single()
+    const { data, error } = await updateWalletBalance(account.id, nextBalance)
 
     if (error) {
       setDataError(error.message)
@@ -1037,15 +1026,7 @@ function App() {
     if (!currentUser.id || !budget || Number.isNaN(amount) || amount <= 0) return
 
     const nextLimit = budget.limit + amount
-    const { data, error } = await supabase
-      .from('budgets')
-      .update({
-        limit_amount: nextLimit,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', budget.id)
-      .select()
-      .single()
+    const { data, error } = await updateBudgetLimit(budget.id, nextLimit)
 
     if (error) {
       setDataError(error.message)
@@ -1065,46 +1046,27 @@ function App() {
     const limit = Number(budgetForm.limit)
     if (!currentUser.id || !budgetForm.name.trim() || Number.isNaN(limit) || limit <= 0) return
 
+    const { data, error } = await saveBudgetRow({
+      budgetData: {
+        name: budgetForm.name.trim(),
+        limit,
+      },
+      editingId,
+      userId: currentUser.id,
+    })
+
+    if (error) {
+      setDataError(error.message)
+      return
+    }
+
     if (editingId) {
-      const { data, error } = await supabase
-        .from('budgets')
-        .update({
-          name: budgetForm.name.trim(),
-          limit_amount: limit,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingId)
-        .select()
-        .single()
-
-      if (error) {
-        setDataError(error.message)
-        return
-      }
-
       setBudgets((current) =>
         current.map((budget) =>
           budget.id === editingId ? mapBudgetRow(data) : budget,
         ),
       )
     } else {
-      const { data, error } = await supabase
-        .from('budgets')
-        .insert({
-          user_id: currentUser.id,
-          name: budgetForm.name.trim(),
-          spent: 0,
-          limit_amount: limit,
-          color: 'bg-[#6A4DF5]',
-        })
-        .select()
-        .single()
-
-      if (error) {
-        setDataError(error.message)
-        return
-      }
-
       setBudgets((current) => [mapBudgetRow(data), ...current])
     }
     closeForm()
@@ -1135,38 +1097,19 @@ function App() {
         { data: debtWalletRow, error: debtWalletError },
         { data: expenseRow, error: expenseError },
       ] = await Promise.all([
-        supabase
-          .from('wallets')
-          .update({
-            balance: nextAccountBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', accountId)
-          .select()
-          .single(),
-        supabase
-          .from('wallets')
-          .update({
-            balance: nextDebtBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', debtAccount.id)
-          .select()
-          .single(),
-        supabase
-          .from('expenses')
-          .insert({
-            user_id: currentUser.id,
-            wallet_id: accountId,
-            budget_id: null,
-            account_name: account.name,
-            budget_name: `Debt: ${debtAccount.name}`,
-            amount: paymentAmount,
-            date: expenseForm.date || getLocalDateKey(new Date()),
-            note: expenseForm.note.trim() || `Payment to ${debtAccount.name}`,
-          })
-          .select()
-          .single(),
+        updateWalletBalance(accountId, nextAccountBalance),
+        updateWalletBalance(debtAccount.id, nextDebtBalance),
+        insertExpenseRow({
+          account,
+          amount: paymentAmount,
+          budget: null,
+          date: expenseForm.date || getLocalDateKey(new Date()),
+          note: {
+            budgetName: `Debt: ${debtAccount.name}`,
+            text: expenseForm.note.trim() || `Payment to ${debtAccount.name}`,
+          },
+          userId: currentUser.id,
+        }),
       ])
 
       const error = walletError || debtWalletError || expenseError
@@ -1209,38 +1152,18 @@ function App() {
       { data: budgetRow, error: budgetError },
       { data: expenseRow, error: expenseError },
     ] = await Promise.all([
-      supabase
-        .from('wallets')
-        .update({
-          balance: nextAccountBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', accountId)
-        .select()
-        .single(),
-      supabase
-        .from('budgets')
-        .update({
-          spent: nextBudgetSpent,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', budgetId)
-        .select()
-        .single(),
-      supabase
-        .from('expenses')
-        .insert({
-          user_id: currentUser.id,
-          wallet_id: accountId,
-          budget_id: budgetId,
-          account_name: account.name,
-          budget_name: budget.name,
-          amount,
-          date: expenseForm.date || getLocalDateKey(new Date()),
-          note: expenseForm.note.trim() || 'Expense',
-        })
-        .select()
-        .single(),
+      updateWalletBalance(accountId, nextAccountBalance),
+      updateBudgetSpent(budgetId, nextBudgetSpent),
+      insertExpenseRow({
+        account,
+        amount,
+        budget,
+        date: expenseForm.date || getLocalDateKey(new Date()),
+        note: {
+          text: expenseForm.note.trim() || 'Expense',
+        },
+        userId: currentUser.id,
+      }),
     ])
 
     const error = walletError || budgetError || expenseError
@@ -1297,47 +1220,23 @@ function App() {
       : null
 
     const requests = [
-      supabase.from('expenses').delete().eq('id', expense.id),
+      deleteExpenseById(expense.id),
     ]
 
     if (account) {
       requests.push(
-        supabase
-          .from('wallets')
-          .update({
-            balance: nextAccountBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', account.id)
-          .select()
-          .single(),
+        updateWalletBalance(account.id, nextAccountBalance),
       )
     }
 
     if (budget) {
       requests.push(
-        supabase
-          .from('budgets')
-          .update({
-            spent: nextBudgetSpent,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', budget.id)
-          .select()
-          .single(),
+        updateBudgetSpent(budget.id, nextBudgetSpent),
       )
     }
     if (debtAccount) {
       requests.push(
-        supabase
-          .from('wallets')
-          .update({
-            balance: nextDebtBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', debtAccount.id)
-          .select()
-          .single(),
+        updateWalletBalance(debtAccount.id, nextDebtBalance),
       )
     }
 
@@ -2637,74 +2536,6 @@ function PennyMonNavIcon({ size = 19 }) {
   )
 }
 
-function getSpendingGraphData(expenses, selectedMonth, selectedWeek = null) {
-  const byDate = expenses
-    .filter((expense) => getExpenseMonthKey(expense.date) === selectedMonth)
-    .filter((expense) => {
-      if (!selectedWeek) return true
-      const date = new Date(`${expense.date}T00:00:00`)
-      return getWeekOfMonth(date) === selectedWeek
-    })
-    .reduce((groups, expense) => {
-    groups[expense.date] = (groups[expense.date] || 0) + expense.amount
-    return groups
-  }, {})
-
-  const points = Object.entries(byDate)
-    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-    .slice(-7)
-    .map(([date, amount]) => ({
-      date,
-      amount,
-      label: new Date(`${date}T00:00:00`).toLocaleDateString('en-MY', {
-        day: '2-digit',
-        month: 'short',
-      }),
-    }))
-
-  return points
-}
-
-function getTodayStats(expenses, safeSpend) {
-  const today = getLocalDateKey(new Date())
-  const dayExpenses = expenses.filter((expense) => expense.date === today)
-  const spent = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0)
-  const remaining = Math.max(safeSpend - spent, 0)
-  const progress = Math.min((spent / Math.max(safeSpend, 1)) * 100, 100)
-  const categoryTotals = dayExpenses.reduce((totals, expense) => {
-    totals[expense.budgetName] = (totals[expense.budgetName] || 0) + expense.amount
-    return totals
-  }, {})
-  const topCategories = Object.entries(categoryTotals)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, amount]) => ({ name, amount }))
-  const sourceTotals = dayExpenses.reduce((totals, expense) => {
-    totals[expense.accountName] = (totals[expense.accountName] || 0) + expense.amount
-    return totals
-  }, {})
-  const sources = Object.entries(sourceTotals)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, amount]) => ({
-      name,
-      amount,
-      percent: spent ? Math.round((amount / spent) * 100) : 0,
-    }))
-  const status =
-    progress >= 100 ? 'Over limit' : progress >= 75 ? 'Watch spending' : 'On track'
-
-  return {
-    count: dayExpenses.length,
-    date: today,
-    progress,
-    remaining,
-    safeSpend,
-    spent,
-    status,
-    sources,
-    topCategories,
-  }
-}
-
 function TodayInsight({ onAddExpense, stats }) {
   if (!stats.count) {
     return (
@@ -2911,63 +2742,6 @@ function SpendingGraph({ points, variant = 'purple' }) {
   )
 }
 
-function formatExpenseDate(dateString) {
-  const date = new Date(`${dateString}T00:00:00`)
-  return date.toLocaleDateString('en-MY', {
-    day: '2-digit',
-    month: 'short',
-    weekday: 'short',
-  })
-}
-
-function formatMoneyAmount(amount) {
-  const value = Number(amount)
-
-  return value.toLocaleString('en-MY', {
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function formatHomeDate(dateString) {
-  const date = new Date(`${dateString}T00:00:00`)
-  return date.toLocaleDateString('en-MY', {
-    day: 'numeric',
-    month: 'short',
-    weekday: 'short',
-  })
-}
-
-function formatCalendarTitle(dateString) {
-  const date = new Date(`${dateString}T00:00:00`)
-  return date.toLocaleDateString('en-MY', {
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
-function getCalendarDays(dateString) {
-  const selected = new Date(`${dateString}T00:00:00`)
-  const year = selected.getFullYear()
-  const month = selected.getMonth()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const firstDay = new Date(year, month, 1).getDay()
-  const blanks = Array.from({ length: firstDay }, (_, index) => ({
-    key: `blank-${index}`,
-    value: null,
-  }))
-  const days = Array.from({ length: daysInMonth }, (_, index) => {
-    const day = index + 1
-    return {
-      key: `${year}-${month}-${day}`,
-      value: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-      label: day,
-    }
-  })
-
-  return [...blanks, ...days]
-}
-
 function CalendarPopover({ onClose, onSelect, selectedDate }) {
   return (
     <div className="absolute inset-0 z-50 grid place-items-center bg-black/60 px-5 backdrop-blur-sm">
@@ -3035,258 +2809,8 @@ function CalendarPopover({ onClose, onSelect, selectedDate }) {
   )
 }
 
-function getWeekOfMonth(date) {
-  return Math.min(Math.ceil(date.getDate() / 7), 4)
-}
-
-function getExpenseMonthKey(dateString) {
-  return dateString.slice(0, 7)
-}
-
-function calculateSafeSpend(accounts, budgets, piggyBankWalletIds = []) {
-  if (!accounts.length || !budgets.length) return 0
-
-  const available = accounts
-    .filter(
-      (account) =>
-        account.balance > 0 &&
-        !isCreditLineAccount(account) &&
-        !piggyBankWalletIds.includes(String(account.id)),
-    )
-    .reduce((sum, account) => sum + account.balance, 0)
-  const remainingBudget = budgets.reduce(
-    (sum, budget) => sum + Math.max(budget.limit - budget.spent, 0),
-    0,
-  )
-  const today = new Date()
-  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-  const daysLeft = Math.max(lastDayOfMonth.getDate() - today.getDate() + 1, 1)
-  const flexibleMoney = Math.max(available - remainingBudget, 0)
-
-  return Math.floor(flexibleMoney / daysLeft)
-}
-
-function calculateDebt(accounts, expenses) {
-  const negativeDebt = accounts
-    .filter((account) => account.balance < 0 && !isCreditLineAccount(account))
-    .reduce((sum, account) => sum + Math.abs(account.balance), 0)
-
-  const creditLineDebt = accounts
-    .filter(isCreditLineAccount)
-    .reduce((sum, account) => {
-      const charged = expenses
-        .filter(
-          (expense) =>
-            expense.walletId === account.id &&
-            !expense.budgetName?.startsWith('Debt: '),
-        )
-        .reduce((total, expense) => total + expense.amount, 0)
-      const repaid = expenses
-        .filter((expense) => expense.budgetName === `Debt: ${account.name}`)
-        .reduce((total, expense) => total + expense.amount, 0)
-
-      return sum + Math.max(charged - repaid, 0)
-    }, 0)
-
-  return negativeDebt + creditLineDebt
-}
-
-function getDailyQuests({
-  claimedQuestIds,
-  piggyBankDepositTodayIds,
-  purchasedTodayIds,
-  todayStats,
-}) {
-  const isAfterNinePm = new Date().getHours() >= 21
-  const isUnderRm20 = todayStats.spent > 0 && todayStats.spent <= 20
-
-  return [
-    {
-      id: 'log-one-expense',
-      title: 'Log one expense',
-      reward: 20,
-      done: todayStats.count > 0,
-      claimable: todayStats.count > 0,
-    },
-    {
-      id: 'under-rm20-after-9pm',
-      title: 'Keep expense under RM20',
-      reward: 30,
-      done: isUnderRm20,
-      claimable: isUnderRm20 && isAfterNinePm,
-    },
-    {
-      id: 'purchase-pennymon-item',
-      title: 'Purchase anything for PennyMon',
-      reward: 25,
-      done: purchasedTodayIds.length > 0,
-      claimable: purchasedTodayIds.length > 0,
-    },
-    {
-      id: 'save-rm5-piggybank',
-      title: 'Add RM5 to PiggyBank',
-      reward: 20,
-      done: piggyBankDepositTodayIds.length > 0,
-      claimable: piggyBankDepositTodayIds.length > 0,
-    },
-  ].map((quest) => ({
-    ...quest,
-    claimed: claimedQuestIds.includes(quest.id),
-  }))
-}
-
-function getOwnedItemsStorageKey(userId) {
-  return `pennymon-owned-items-${userId || 'guest'}`
-}
-
-function getQuestStorageKey(userId) {
-  return `pennymon-quests-${userId || 'guest'}-${getLocalDateKey(new Date())}`
-}
-
-function getPurchaseStorageKey(userId) {
-  return `pennymon-purchases-${userId || 'guest'}-${getLocalDateKey(new Date())}`
-}
-
-function getPiggyBankStorageKey(userId) {
-  return `pennymon-piggybank-wallets-${userId || 'guest'}`
-}
-
-function getPiggyBankDepositStorageKey(userId) {
-  return `pennymon-piggybank-deposits-${userId || 'guest'}-${getLocalDateKey(new Date())}`
-}
-
-function loadOwnedItems(userId) {
-  const storedItems = localStorage.getItem(getOwnedItemsStorageKey(userId))
-  if (!storedItems) return defaultOwnedItems
-
-  try {
-    const parsedItems = JSON.parse(storedItems)
-    return {
-      accessories: [
-        ...new Set([
-          ...defaultOwnedItems.accessories,
-          ...(parsedItems.accessories || []),
-        ]),
-      ],
-      colors: [
-        ...new Set([
-          ...defaultOwnedItems.colors,
-          ...(parsedItems.colors || []),
-        ]),
-      ],
-      rooms: [
-        ...new Set([
-          ...defaultOwnedItems.rooms,
-          ...(parsedItems.rooms || []),
-        ]),
-      ],
-    }
-  } catch {
-    return defaultOwnedItems
-  }
-}
-
-function loadClaimedQuestIds(userId) {
-  const storedQuestIds = localStorage.getItem(getQuestStorageKey(userId))
-  if (!storedQuestIds) return []
-
-  try {
-    const parsedQuestIds = JSON.parse(storedQuestIds)
-    return Array.isArray(parsedQuestIds) ? parsedQuestIds : []
-  } catch {
-    return []
-  }
-}
-
-function loadPurchasedTodayIds(userId) {
-  const storedPurchaseIds = localStorage.getItem(getPurchaseStorageKey(userId))
-  if (!storedPurchaseIds) return []
-
-  try {
-    const parsedPurchaseIds = JSON.parse(storedPurchaseIds)
-    return Array.isArray(parsedPurchaseIds) ? parsedPurchaseIds : []
-  } catch {
-    return []
-  }
-}
-
-function loadPiggyBankWalletIds(userId) {
-  const storedWalletIds = localStorage.getItem(getPiggyBankStorageKey(userId))
-  if (!storedWalletIds) return []
-
-  try {
-    const parsedWalletIds = JSON.parse(storedWalletIds)
-    return Array.isArray(parsedWalletIds) ? parsedWalletIds.map(String) : []
-  } catch {
-    return []
-  }
-}
-
-function loadPiggyBankDepositTodayIds(userId) {
-  const storedDepositIds = localStorage.getItem(getPiggyBankDepositStorageKey(userId))
-  if (!storedDepositIds) return []
-
-  try {
-    const parsedDepositIds = JSON.parse(storedDepositIds)
-    return Array.isArray(parsedDepositIds) ? parsedDepositIds.map(String) : []
-  } catch {
-    return []
-  }
-}
-
 function isOwnedItem(ownedItems, kind, itemId) {
   return Boolean(ownedItems?.[kind]?.includes(itemId))
-}
-
-function getPennyMonMood(totals, budgets, todayStats, purchasedTodayIds = []) {
-  if (!budgets.length) return 'Happy'
-  if (budgets.some((budget) => budget.spent / budget.limit >= 1.2)) return 'Angry'
-  if (totals.debt > 0 && totals.debt > totals.available) return 'Angry'
-  if (budgets.some((budget) => budget.spent > budget.limit)) return 'Sad'
-  if (budgets.some((budget) => budget.spent / budget.limit >= 0.9)) return 'Worried'
-  if (purchasedTodayIds.length > 0 && totals.safeSpend >= 50) return 'Excited'
-  if (todayStats.spent > 0) return 'Calm'
-  return 'Happy'
-}
-
-function getPennyMonMoodReason(
-  totals,
-  budgets,
-  todayStats,
-  purchasedTodayIds = [],
-) {
-  if (!budgets.length) {
-    return 'No budget has been created yet, so PennyMon is starting in a happy mood.'
-  }
-
-  const badlyOverspentBudget = budgets.find((budget) => budget.spent / budget.limit >= 1.2)
-  if (badlyOverspentBudget) {
-    return `${badlyOverspentBudget.name} is 120% or more over its limit, so PennyMon feels angry.`
-  }
-
-  if (totals.debt > 0 && totals.debt > totals.available) {
-    return `Your debt is higher than your available cash, so PennyMon feels angry.`
-  }
-
-  const overspentBudget = budgets.find((budget) => budget.spent > budget.limit)
-  if (overspentBudget) {
-    return `${overspentBudget.name} is over its budget limit, so PennyMon feels sad.`
-  }
-
-  const nearLimitBudget = budgets.find((budget) => budget.spent / budget.limit >= 0.9)
-  if (nearLimitBudget) {
-    return `${nearLimitBudget.name} has used 90% or more of its budget, so PennyMon feels worried.`
-  }
-
-  if (purchasedTodayIds.length > 0 && totals.safeSpend >= 50) {
-    return `You bought something new for PennyMon and still have RM${formatMoneyAmount(totals.safeSpend)} safe to spend per day, so PennyMon feels excited.`
-  }
-
-  if (todayStats.spent > 0) {
-    return 'You logged spending today and your budgets are still under control, so PennyMon feels calm.'
-  }
-
-  return 'Your budgets look stable today, so PennyMon feels happy.'
 }
 
 function normalizeAccessory(accessory) {
@@ -3302,122 +2826,6 @@ function normalizeAccessory(accessory) {
   if (normalized.includes('space')) return 'Space Bowl'
 
   return match?.id || 'None'
-}
-
-function getLocalDateKey(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
-}
-
-function formatExpenseMonth(monthKey) {
-  const date = new Date(`${monthKey}-01T00:00:00`)
-  return date.toLocaleDateString('en-MY', {
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
-function formatWeekRange(monthKey, week) {
-  const [year, month] = monthKey.split('-').map(Number)
-  const lastDay = new Date(year, month, 0).getDate()
-  const startDay = (week - 1) * 7 + 1
-  const endDay = week === 4 ? lastDay : Math.min(week * 7, lastDay)
-  const startDate = new Date(year, month - 1, startDay)
-  const endDate = new Date(year, month - 1, endDay)
-  const startLabel = startDate.toLocaleDateString('en-MY', {
-    day: '2-digit',
-    month: 'short',
-  })
-  const endLabel = endDate.toLocaleDateString('en-MY', {
-    day: '2-digit',
-    month: 'short',
-  })
-
-  return `Week ${week} · ${startLabel} - ${endLabel}`
-}
-
-function getExpenseMonths(expenses) {
-  return [...new Set(expenses.map((expense) => getExpenseMonthKey(expense.date)))]
-    .sort((a, b) => b.localeCompare(a))
-    .map((month) => ({
-      value: month,
-      label: formatExpenseMonth(month),
-    }))
-}
-
-function groupExpenses(expenses, selectedWeek, selectedMonth) {
-  const sorted = [...expenses].sort(
-    (a, b) => new Date(b.date) - new Date(a.date),
-  )
-  const months = []
-
-  sorted
-    .filter((expense) => getExpenseMonthKey(expense.date) === selectedMonth)
-    .filter((expense) => {
-      const date = new Date(`${expense.date}T00:00:00`)
-      return getWeekOfMonth(date) === selectedWeek
-    })
-    .forEach((expense) => {
-    const date = new Date(`${expense.date}T00:00:00`)
-    const month = date.toLocaleDateString('en-MY', {
-      month: 'long',
-      year: 'numeric',
-    })
-    const week = formatExpenseDate(expense.date)
-    let monthGroup = months.find((item) => item.month === month)
-
-    if (!monthGroup) {
-      monthGroup = { month, weeks: [] }
-      months.push(monthGroup)
-    }
-
-    let weekGroup = monthGroup.weeks.find((item) => item.week === week)
-
-    if (!weekGroup) {
-      weekGroup = { week, items: [] }
-      monthGroup.weeks.push(weekGroup)
-    }
-
-    weekGroup.items.push(expense)
-  })
-
-  return months
-}
-
-function mapWalletRow(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    balance: Number(row.balance),
-    tone: row.tone,
-  }
-}
-
-function mapBudgetRow(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    spent: Number(row.spent),
-    limit: Number(row.limit_amount),
-    color: row.color,
-  }
-}
-
-function mapExpenseRow(row) {
-  return {
-    id: row.id,
-    walletId: row.wallet_id,
-    budgetId: row.budget_id,
-    amount: Number(row.amount),
-    accountName: row.account_name,
-    budgetName: row.budget_name,
-    date: row.date,
-    note: row.note,
-  }
 }
 
 function AuthScreen({
@@ -4042,3 +3450,11 @@ function ActionHeader({ icon: Icon, title, subtitle, isDark, onAction }) {
 }
 
 export default App
+
+
+
+
+
+
+
+

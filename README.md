@@ -37,6 +37,29 @@ PennyMon makes money tracking feel like caring for a virtual companion. Users lo
 - Supabase Edge Functions: backend API for AI requests
 - Google Gemini API: PennyMon AI responses
 
+## Frontend Architecture
+
+PennyMon uses a feature-sliced frontend architecture with a service/data boundary around Supabase. The app is organised by product capabilities instead of only by file type, so finance logic, quest logic, local prototype storage, and shared formatting utilities can evolve independently from the UI.
+
+```txt
+src/
+  App.jsx                    # App shell and screen composition
+  features/
+    auth/services/           # Supabase Auth boundary
+    ai/services/             # Edge Function AI boundary
+    money/services/          # Wallet, budget, and expense data access
+    money/utils/             # Wallet, budget, expense, debt, mood calculations
+    pennymon/services/       # PennyMon profile persistence
+    quests/utils/            # Daily quest rules
+  shared/
+    storage/                 # Prototype localStorage persistence helpers
+    utils/                   # Date and money formatting helpers
+  lib/
+    supabase.js              # Supabase client factory only
+```
+
+This keeps judge-visible demo screens stable while separating the core business rules from React markup. Prototype-only localStorage state can later move into Supabase tables such as `quest_progress`, `owned_items`, and `shop_purchases` without rewriting the UI.
+
 ## System Architecture
 
 ```txt
@@ -263,3 +286,5 @@ No public demo account is included by default. For judging, create a temporary S
 ## License
 
 This project is licensed under the MIT License. See `LICENSE`.
+
+
