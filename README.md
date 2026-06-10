@@ -240,9 +240,27 @@ PennyMon sends the selected question and a finance summary to the Edge Function.
   <img src="docs/screenshots/screenshot-19.png" alt="PennyMon app screenshot 19" width="220" />
 </p>
 
+## Demo Data
+
+For final-round rehearsal or judging, use the repeatable seed file:
+
+```txt
+supabase/demo_seed.sql
+```
+
+Create/register the demo auth user first, then run the SQL file in the Supabase SQL editor. Use this prepared account:
+
+```txt
+Email: pennymondemo@gmail.com
+Password: pennymondemo11
+Username: PennyMon Demo
+```
+
+The seed resets only that user's PennyMon data and inserts realistic wallets, budgets, expenses, PayLater debt, PiggyBank savings, and PennyMon profile coins. A suggested live walkthrough is documented in `docs/DEMO_WALKTHROUGH.md`.
+
 ## Demo Account
 
-No public demo account is included by default. For judging, create a temporary Supabase Auth user and add demo wallets, budgets, and expenses before the presentation.
+Prepared final demo account: `pennymondemo@gmail.com` / `pennymondemo11`. Create this account in Supabase Auth or through app signup before running `supabase/demo_seed.sql`.
 
 ## Known Limitations
 
@@ -286,5 +304,4 @@ No public demo account is included by default. For judging, create a temporary S
 ## License
 
 This project is licensed under the MIT License. See `LICENSE`.
-
 

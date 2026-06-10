@@ -98,6 +98,7 @@ import {
 import {
   formatCalendarTitle,
   formatExpenseDate,
+  formatExpenseMonth,
   formatHomeDate,
   formatWeekRange,
   getCalendarDays,
@@ -302,7 +303,9 @@ function App() {
   const [activeForm, setActiveForm] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [historyWeek, setHistoryWeek] = useState(1)
-  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState('2026-05')
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState(
+    getExpenseMonthKey(getLocalDateKey(new Date())),
+  )
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [isSpendCardFlipped, setIsSpendCardFlipped] = useState(false)
   const [isMoodInfoOpen, setIsMoodInfoOpen] = useState(false)
@@ -377,6 +380,14 @@ function App() {
     safeSpend: calculateSafeSpend(accounts, budgets, piggyBankWalletIds),
   }
   const historyMonths = getExpenseMonths(expenses)
+  const currentHistoryMonth = getExpenseMonthKey(getLocalDateKey(new Date()))
+  const historyMonthOptions = [
+    {
+      value: currentHistoryMonth,
+      label: formatExpenseMonth(currentHistoryMonth),
+    },
+    ...historyMonths.filter((month) => month.value !== currentHistoryMonth),
+  ]
   const todayStats = getTodayStats(expenses, totals.safeSpend)
   const quests = getDailyQuests({
     claimedQuestIds,
@@ -483,6 +494,8 @@ function App() {
     setAccounts(walletRows.map(mapWalletRow))
     setBudgets(budgetRows.map(mapBudgetRow))
     setExpenses(expenseRows.map(mapExpenseRow))
+    setSelectedHistoryMonth(getExpenseMonthKey(getLocalDateKey(new Date())))
+    setHistoryWeek(getWeekOfMonth(new Date()))
     setOwnedItems(loadedOwnedItems)
     setClaimedQuestIds(loadClaimedQuestIds(userId))
     setPiggyBankWalletIds(loadedPiggyBankWalletIds)
@@ -1901,7 +1914,7 @@ function App() {
                   onChange={(event) => setSelectedHistoryMonth(event.target.value)}
                   value={selectedHistoryMonth}
                 >
-                  {historyMonths.map((month) => (
+                  {historyMonthOptions.map((month) => (
                     <option key={month.value} value={month.value}>
                       {month.label}
                     </option>
