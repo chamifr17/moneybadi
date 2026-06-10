@@ -306,43 +306,42 @@ PennyMon sends the selected question and a finance summary to the Edge Function.
 
 ### Part 1: First-Time User Setup
 
-| Create Account | Locked First-Time Dashboard | Add First Wallet |
+| New User Home Page | Setup Required: Wallet and Budget Needed | Locked Daily Quests |
 |---|---|---|
-| <img src="docs/screenshots/part-1-01-create-account.png" alt="Create Account" width="220" /> | <img src="docs/screenshots/part-1-02-locked-dashboard.png" alt="Locked First-Time Dashboard" width="220" /> | <img src="docs/screenshots/part-1-03-add-first-wallet.png" alt="Add First Wallet" width="220" /> |
+| <img src="docs/screenshots/part-1-01-new-user-home-page.png" alt="New User Home Page" width="220" /><br />New users start from a guided home page. | <img src="docs/screenshots/part-1-02-setup-required-wallet-budget.png" alt="Setup Required: Wallet and Budget Needed" width="220" /><br />Users must set up a wallet and budget before daily insight, Add Expense, and PennyMon unlock. | <img src="docs/screenshots/part-1-03-locked-daily-quests.png" alt="Locked Daily Quests" width="220" /><br />Daily quests guide users to complete money habits and earn Monny. |
 
-| Add First Budget | Unlocked Navigation | Add First Expense |
-|---|---|---|
-| <img src="docs/screenshots/part-1-04-add-first-budget.png" alt="Add First Budget" width="220" /> | <img src="docs/screenshots/part-1-05-unlocked-navigation.png" alt="Unlocked Navigation" width="220" /> | <img src="docs/screenshots/part-1-06-add-first-expense.png" alt="Add First Expense" width="220" /> |
-
+| Wallet Setup Required | Budget Setup Required |
+|---|---|
+| <img src="docs/screenshots/part-1-04-wallet-setup-required.png" alt="Wallet Setup Required" width="220" /><br />The Wallet page guides users to add their first wallet. | <img src="docs/screenshots/part-1-05-budget-setup-required.png" alt="Budget Setup Required" width="220" /><br />The Budget page guides users to create their first budget. |
 ### Part 2: Demo Account With Rich Data
 
-| Demo Account Dashboard | PennyMon Mood Explanation | Daily Insight Card |
+| Step 1 | Step 2 | Step 3 |
 |---|---|---|
-| <img src="docs/screenshots/part-2-01-demo-dashboard.png" alt="Demo Account Dashboard" width="220" /> | <img src="docs/screenshots/part-2-02-mood-explanation.png" alt="PennyMon Mood Explanation" width="220" /> | <img src="docs/screenshots/part-2-03-daily-insight-card.png" alt="Daily Insight Card" width="220" /> |
+| <img src="docs/screenshots/part-2-01-demo-dashboard.png" alt="Part 2 Step 1" width="220" /> | <img src="docs/screenshots/part-2-02-mood-explanation.png" alt="Part 2 Step 2" width="220" /> | <img src="docs/screenshots/part-2-03-daily-insight-card.png" alt="Part 2 Step 3" width="220" /> |
 
-| Daily Quests | Wallet Overview | Wallet Swipe Actions |
+| Step 4 | Step 5 | Step 6 |
 |---|---|---|
-| <img src="docs/screenshots/part-2-04-daily-quests.png" alt="Daily Quests" width="220" /> | <img src="docs/screenshots/part-2-05-wallet-overview.png" alt="Wallet Overview" width="220" /> | <img src="docs/screenshots/part-2-06-wallet-swipe-actions.png" alt="Wallet Swipe Actions" width="220" /> |
+| <img src="docs/screenshots/part-2-04-daily-quests.png" alt="Part 2 Step 4" width="220" /> | <img src="docs/screenshots/part-2-05-wallet-overview.png" alt="Part 2 Step 5" width="220" /> | <img src="docs/screenshots/part-2-06-wallet-swipe-actions.png" alt="Part 2 Step 6" width="220" /> |
 
-| PayLater Limit Protection | Budget Overview | Budget Swipe Actions |
+| Step 7 | Step 8 | Step 9 |
 |---|---|---|
-| <img src="docs/screenshots/part-2-07-paylater-limit-protection.png" alt="PayLater Limit Protection" width="220" /> | <img src="docs/screenshots/part-2-08-budget-overview.png" alt="Budget Overview" width="220" /> | <img src="docs/screenshots/part-2-09-budget-swipe-actions.png" alt="Budget Swipe Actions" width="220" /> |
+| <img src="docs/screenshots/part-2-07-paylater-limit-protection.png" alt="Part 2 Step 7" width="220" /> | <img src="docs/screenshots/part-2-08-budget-overview.png" alt="Part 2 Step 8" width="220" /> | <img src="docs/screenshots/part-2-09-budget-swipe-actions.png" alt="Part 2 Step 9" width="220" /> |
 
-| Add Expense Form | Smart Wallet Dropdown | PayLater Hidden When Limit Is Exceeded |
+| Step 10 | Step 11 | Step 12 |
 |---|---|---|
-| <img src="docs/screenshots/part-2-10-add-expense-form.png" alt="Add Expense Form" width="220" /> | <img src="docs/screenshots/part-2-11-smart-wallet-dropdown.png" alt="Smart Wallet Dropdown" width="220" /> | <img src="docs/screenshots/part-2-12-paylater-hidden.png" alt="PayLater Hidden When Limit Is Exceeded" width="220" /> |
+| <img src="docs/screenshots/part-2-10-add-expense-form.png" alt="Part 2 Step 10" width="220" /> | <img src="docs/screenshots/part-2-11-smart-wallet-dropdown.png" alt="Part 2 Step 11" width="220" /> | <img src="docs/screenshots/part-2-12-paylater-hidden.png" alt="Part 2 Step 12" width="220" /> |
 
-| Expense Saved Successfully | Current Month Expense History | Weekly Spending Trend |
+| Step 13 | Step 14 | Step 15 |
 |---|---|---|
-| <img src="docs/screenshots/part-2-13-expense-saved.png" alt="Expense Saved Successfully" width="220" /> | <img src="docs/screenshots/part-2-14-current-month-history.png" alt="Current Month Expense History" width="220" /> | <img src="docs/screenshots/part-2-15-weekly-spending-trend.png" alt="Weekly Spending Trend" width="220" /> |
+| <img src="docs/screenshots/part-2-13-expense-saved.png" alt="Part 2 Step 13" width="220" /> | <img src="docs/screenshots/part-2-14-current-month-history.png" alt="Part 2 Step 14" width="220" /> | <img src="docs/screenshots/part-2-15-weekly-spending-trend.png" alt="Part 2 Step 15" width="220" /> |
 
-| Previous Month History | PennyMon Customization | Ask PennyMon |
+| Step 16 | Step 17 | Step 18 |
 |---|---|---|
-| <img src="docs/screenshots/part-2-16-previous-month-history.png" alt="Previous Month History" width="220" /> | <img src="docs/screenshots/part-2-17-pennymon-customization.png" alt="PennyMon Customization" width="220" /> | <img src="docs/screenshots/part-2-18-ask-pennymon.png" alt="Ask PennyMon" width="220" /> |
+| <img src="docs/screenshots/part-2-16-previous-month-history.png" alt="Part 2 Step 16" width="220" /> | <img src="docs/screenshots/part-2-17-pennymon-customization.png" alt="Part 2 Step 17" width="220" /> | <img src="docs/screenshots/part-2-18-ask-pennymon.png" alt="Part 2 Step 18" width="220" /> |
 
-| AI Answer |
+| Step 19 |
 |---|
-| <img src="docs/screenshots/part-2-19-ai-answer.png" alt="AI Answer" width="220" /> |
+| <img src="docs/screenshots/part-2-19-ai-answer.png" alt="Part 2 Step 19" width="220" /> |
 
 ## Demo Data
 
@@ -404,5 +403,8 @@ The seed resets only that user's PennyMon data and inserts realistic wallets, bu
 ## License
 
 This project is licensed under the MIT License. See `LICENSE`.
+
+
+
 
 
