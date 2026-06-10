@@ -1321,7 +1321,6 @@ function App() {
   const isModalOpen =
     Boolean(activeForm) ||
     isCalendarOpen ||
-    isMoodInfoOpen ||
     isRoomPickerOpen ||
     isColorPickerOpen ||
     isAccessoryPickerOpen ||
@@ -1406,8 +1405,12 @@ function App() {
           <div className="space-y-4 pt-3">
             <div
               className="block h-[315px] w-full text-left [perspective:1200px]"
-              onClick={() => setIsSpendCardFlipped((current) => !current)}
+              onClick={() => {
+                if (isMoodInfoOpen) return
+                setIsSpendCardFlipped((current) => !current)
+              }}
               onKeyDown={(event) => {
+                if (isMoodInfoOpen) return
                 if (event.key === 'Enter' || event.key === ' ') {
                   setIsSpendCardFlipped((current) => !current)
                 }
@@ -1433,7 +1436,7 @@ function App() {
                         className="grid size-6 shrink-0 place-items-center rounded-full bg-white/20 text-xs font-black text-white ring-1 ring-white/25"
                         onClick={(event) => {
                           event.stopPropagation()
-                          setIsMoodInfoOpen((current) => !current)
+                          setIsMoodInfoOpen(true)
                         }}
                         type="button"
                       >
@@ -1480,7 +1483,10 @@ function App() {
                       </p>
                       <button
                         className="mt-4 rounded-full bg-[#6A4DF5] px-4 py-2 text-xs font-bold text-white"
-                        onClick={() => setIsMoodInfoOpen(false)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setIsMoodInfoOpen(false)
+                        }}
                         type="button"
                       >
                         Got it
@@ -2194,9 +2200,9 @@ function App() {
                   key={tab.id}
                   onClick={() => {
                     if (isLocked) return
+                    if (isMoodInfoOpen) return
                     setActiveForm(null)
                     setIsCalendarOpen(false)
-                    setIsMoodInfoOpen(false)
                     setIsRoomPickerOpen(false)
                     setIsColorPickerOpen(false)
                     setIsAccessoryPickerOpen(false)
